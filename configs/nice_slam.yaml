@@ -114,4 +114,4 @@ model:
   c_dim: 32
   coarse_bound_enlarge: 2
   pos_embedding_method: fourier
-wandb_dir: "./output/wandb"
+wandb_dir: "./output"

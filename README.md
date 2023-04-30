@@ -49,7 +49,7 @@ The mesh for evaluation is saved as `$OUTPUT_FOLDER/mesh/final_mesh_eval_rec.ply
 
 If you have access to SLURM cluster, you can also run the bash script to make life easier:
 ```bash
-mkdir ./output/log
+mkdir -p ./output/log ./output/wandb
 sbatch ./scripts/slurm_run.sh
 ```
 The log file can be tailed using command:
