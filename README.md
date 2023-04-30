@@ -3,6 +3,14 @@
 This is a repository based on NICE-SLAM.
 Please basically follow the README in their repo (https://github.com/cvg/nice-slam).
 
+## Installation
+
+Create and activate an environment `evennicer-slam` by running:
+```bash
+conda env create -f environment.yaml
+conda activate evennicer-slam
+```
+
 ## Datasets
 
 ### Replica
