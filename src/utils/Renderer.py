@@ -1,5 +1,6 @@
 import torch
-from src.common import get_rays, raw2outputs_nerf_color, sample_pdf
+from torchvision import transforms
+from src.common import get_rays, raw2outputs_nerf_color, sample_pdf, get_rays_rescale
 
 
 class Renderer(object):
@@ -253,6 +254,69 @@ class Renderer(object):
             uncertainty = uncertainty.reshape(H, W)
             color = color.reshape(H, W, 3)
             return depth, uncertainty, color
+
+    def render_img_rescale(self, c, decoders, c2w, device, stage, gt_depth=None, scale_factor=0.1):
+        """
+        Renders out depth, uncertainty, and color images.
+
+        Args:
+            c (dict): feature grids.
+            decoders (nn.module): decoders.
+            c2w (tensor): camera to world matrix of current frame.
+            device (str): device name to compute on.
+            stage (str): query stage.
+            gt_depth (tensor, optional): sensor depth image. Defaults to None.
+
+        Returns:
+            depth (tensor, H*W): rendered depth image.
+            uncertainty (tensor, H*W): rendered uncertainty image.
+            color (tensor, H*W*3): rendered color image.
+        """
+        H = self.H
+        W = self.W
+        new_H, new_W = int(H*scale_factor), int(W*scale_factor)
+        rays_o, rays_d = get_rays_rescale(
+            H, W, new_H, new_W, self.fx, self.fy, self.cx, self.cy,  c2w, device)
+        rays_o = rays_o.reshape(-1, 3)
+        rays_d = rays_d.reshape(-1, 3)
+
+        depth_list = []
+        uncertainty_list = []
+        color_list = []
+
+        # rescale gt_depth too
+        if gt_depth is not None:
+            transform = transforms.Resize((new_H, new_W), interpolation=transforms.InterpolationMode.BILINEAR)
+            gt_depth = gt_depth.unsqueeze(0)
+            gt_depth = transform(gt_depth)
+            gt_depth = gt_depth.reshape(-1)
+
+        ray_batch_size = self.ray_batch_size
+
+        for i in range(0, rays_d.shape[0], ray_batch_size):
+            rays_d_batch = rays_d[i:i+ray_batch_size]
+            rays_o_batch = rays_o[i:i+ray_batch_size]
+            if gt_depth is None:
+                ret = self.render_batch_ray(
+                    c, decoders, rays_d_batch, rays_o_batch, device, stage, gt_depth=None)
+            else:
+                gt_depth_batch = gt_depth[i:i+ray_batch_size]
+                ret = self.render_batch_ray(
+                    c, decoders, rays_d_batch, rays_o_batch, device, stage, gt_depth=gt_depth_batch)
+
+            depth, uncertainty, color = ret
+            depth_list.append(depth.double())
+            uncertainty_list.append(uncertainty.double())
+            color_list.append(color)
+
+        depth = torch.cat(depth_list, dim=0)
+        uncertainty = torch.cat(uncertainty_list, dim=0)
+        color = torch.cat(color_list, dim=0)
+
+        depth = depth.reshape(new_H, new_W)
+        uncertainty = uncertainty.reshape(new_H, new_W)
+        color = color.reshape(new_H, new_W, 3)
+        return depth, uncertainty, color
 
     # this is only for imap*
     def regulation(self, c, decoders, rays_d, rays_o, gt_depth, device, stage='color'):

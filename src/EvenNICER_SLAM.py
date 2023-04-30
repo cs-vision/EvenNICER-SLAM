@@ -14,12 +14,16 @@ from src.utils.Logger import Logger
 from src.utils.Mesher import Mesher
 from src.utils.Renderer import Renderer
 
+from event_net import UNet_2heads
+
 torch.multiprocessing.set_sharing_strategy('file_system')
 
+import wandb
 
-class NICE_SLAM():
+
+class EvenNICER_SLAM():
     """
-    NICE_SLAM main class.
+    EvenNICER_SLAM main class.
     Mainly allocate shared resources, and dispatch mapping and tracking process.
     """
 
@@ -88,6 +92,17 @@ class NICE_SLAM():
         self.shared_decoders = self.shared_decoders.to(
             self.cfg['mapping']['device'])
         self.shared_decoders.share_memory()
+
+        # event-net loading
+        self.event_net = UNet_2heads(n_channels=6, n_classes1=2, n_classes2=2)
+        self.event_net.load_state_dict(torch.load(self.cfg['event']['pretrained_path'], map_location=cfg['mapping']['device']))
+        self.event_net = self.event_net.to(self.cfg['mapping']['device'])
+        self.event_net.share_memory()
+        self.scale_factor = self.cfg['event']['scale_factor']
+
+        # initialize wandb
+        self.experiment = wandb.init(project='EvenNICER-SLAM', resume='allow', anonymous='must')
+
         self.renderer = Renderer(cfg, args, self)
         self.mesher = Mesher(cfg, args, self)
         self.logger = Logger(cfg, args, self)

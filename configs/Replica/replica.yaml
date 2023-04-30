@@ -1,4 +1,16 @@
-dataset: 'replica'
+# dataset: 'replica'
+dataset: 'replica_event'
+event:
+  pretrained_path: 'pretrained/eventnet_2head_replica_1epoch.pth'
+  rgbd_every_frame: 5 # RGBD frame gap
+  # below are currently only for tracking. Consider moving to 'tracking' if these configs need to be separately set for tracking and mapping.
+  activate_events: True # A switch to turn on/off event loss backpropagation
+  balancer: 0.025 # Lambda_event in the paper. A coefficient to balance event loss and rgbd loss
+  scale_factor: 0.15 # for event image downscaling
+  blur: True # blur both the gt and predicted event images before loss computation to alleviate alignment issue. Uses the Gaussian kernels below
+  kernel_sizes: [9] # Side lengths of Gaussian kernels. Must be a list of odd numbers. Multiple elements for multiple kernels
+  unblurred_weight: 0 # Weight for loss from unblurred event images
+  kernel_weights: [1] # Weights for loss from blurred event images using specified kernels. Must be of the same length as 'kernel_sizes'
 meshing:
   eval_rec: True
 tracking:

@@ -106,6 +106,26 @@ def select_uv(i, j, n, depth, color, device='cuda:0'):
     color = color[indices]  # (n,3)
     return i, j, depth, color
 
+def select_uv_event(i, j, n, depth, color, event1, event2, device='cuda:0'):
+    """
+    Select n uv from dense uv.
+
+    """
+    i = i.reshape(-1)
+    j = j.reshape(-1)
+    indices = torch.randint(i.shape[0], (n,), device=device)
+    indices = indices.clamp(0, i.shape[0])
+    i = i[indices]  # (n)
+    j = j[indices]  # (n)
+    depth = depth.reshape(-1)
+    color = color.reshape(-1, 3)
+    event1 = event1.reshape(-1, 2)
+    event2 = event2.reshape(-1, 2)
+    depth = depth[indices]  # (n)
+    color = color[indices]  # (n,3)
+    event1 = event1[indices]  # (n,2)
+    event2 = event2[indices]  # (n,2)
+    return i, j, depth, color, event1, event2
 
 def get_sample_uv(H0, H1, W0, W1, n, depth, color, device='cuda:0'):
     """
@@ -121,6 +141,21 @@ def get_sample_uv(H0, H1, W0, W1, n, depth, color, device='cuda:0'):
     i, j, depth, color = select_uv(i, j, n, depth, color, device=device)
     return i, j, depth, color
 
+def get_sample_uv_event(H0, H1, W0, W1, n, depth, color, event1, event2, device='cuda:0'):
+    """
+    Sample n uv coordinates from an image region H0..H1, W0..W1
+
+    """
+    depth = depth[H0:H1, W0:W1]
+    color = color[H0:H1, W0:W1]
+    event1 = event1[H0:H1, W0:W1]
+    event2 = event2[H0:H1, W0:W1]
+    i, j = torch.meshgrid(torch.linspace(
+        W0, W1-1, W1-W0).to(device), torch.linspace(H0, H1-1, H1-H0).to(device))
+    i = i.t()  # transpose
+    j = j.t()
+    i, j, depth, color, event1, event2 = select_uv_event(i, j, n, depth, color, event1, event2, device=device)
+    return i, j, depth, color, event1, event2
 
 def get_samples(H0, H1, W0, W1, n, H, W, fx, fy, cx, cy, c2w, depth, color, device):
     """
@@ -133,6 +168,23 @@ def get_samples(H0, H1, W0, W1, n, H, W, fx, fy, cx, cy, c2w, depth, color, devi
     rays_o, rays_d = get_rays_from_uv(i, j, c2w, H, W, fx, fy, cx, cy, device)
     return rays_o, rays_d, sample_depth, sample_color
 
+def get_uniform_samples(H0, H1, W0, W1, H, W, h_new, w_new, fx, fy, cx, cy, c2w, depth, device):
+    i, j = torch.meshgrid(torch.linspace(
+        W0, W1-1, w_new).to(device), torch.linspace(H0, H1-1, h_new).to(device))
+    rays_o, rays_d = get_rays_from_uv(i, j, c2w, H, W, fx, fy, cx, cy, device)
+    
+    return rays_o, rays_d, sample_depth
+
+def get_samples_event(H0, H1, W0, W1, n, H, W, fx, fy, cx, cy, c2w, depth, color, event1, event2, device):
+    """
+    Get n rays from the image region H0..H1, W0..W1.
+    c2w is its camera pose and depth/color/event is the corresponding image tensor.
+
+    """
+    i, j, sample_depth, sample_color, sample_event1, sample_event2 = get_sample_uv_event(
+        H0, H1, W0, W1, n, depth, color, event1, event2, device=device)
+    rays_o, rays_d = get_rays_from_uv(i, j, c2w, H, W, fx, fy, cx, cy, device)
+    return rays_o, rays_d, sample_depth, sample_color, sample_event1, sample_event2
 
 def quad2rotation(quad):
     """
@@ -265,6 +317,27 @@ def get_rays(H, W, fx, fy, cx, cy, c2w, device):
     rays_o = c2w[:3, -1].expand(rays_d.shape)
     return rays_o, rays_d
 
+def get_rays_rescale(H, W, new_H, new_W, fx, fy, cx, cy, c2w, device):
+    """
+    Get rays for a whole image.
+
+    """
+    if isinstance(c2w, np.ndarray):
+        c2w = torch.from_numpy(c2w)
+    # pytorch's meshgrid has indexing='ij'
+    i, j = torch.meshgrid(torch.linspace(0, W-1, new_W), torch.linspace(0, H-1, new_H))
+    i = i.t()  # transpose
+    j = j.t()
+    dirs = torch.stack(
+        [(i-cx)/fx, -(j-cy)/fy, -torch.ones_like(i)], -1).to(device)
+    dirs = dirs.reshape(new_H, new_W, 1, 3)
+    # Rotate ray directions from camera frame to the world frame
+    # dot product, equals to: [c2w.dot(dir) for dir in dirs]
+    if device == 'cuda:1': # for multi gpu
+        c2w = c2w.to(device)
+    rays_d = torch.sum(dirs * c2w[:3, :3], -1)
+    rays_o = c2w[:3, -1].expand(rays_d.shape)
+    return rays_o, rays_d
 
 def normalize_3d_coordinate(p, bound):
     """

@@ -5,3 +5,5 @@ mapping:
 data:
   input_folder: Datasets/Replica/office2
   output: output/Replica/office2
+  # event folder
+  event_folder: Datasets/replica_gt_png/office2
