@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -101,7 +102,16 @@ class EvenNICER_SLAM():
         self.scale_factor = self.cfg['event']['scale_factor']
 
         # initialize wandb
-        self.experiment = wandb.init(project='EvenNICER-SLAM', resume='allow', anonymous='must')
+        self.scene_name = cfg['data']['input_folder'].split('/')[-1]
+        self.suffix = args.output.split('/')[-1]
+        now = datetime.now()
+        dt_string = now.strftime("%Y%m%d_%H%M%S")
+        self.experiment = wandb.init(config=cfg, project='EvenNICER-SLAM', group=self.scene_name, 
+                                     name=f'{self.suffix}_{dt_string}', 
+                                     settings=wandb.Settings(code_dir="."), dir=cfg['wandb_dir'],
+                                     tags=[self.scene_name], 
+                                     resume='allow', anonymous='must')
+        wandb.run.log_code(".")
 
         self.renderer = Renderer(cfg, args, self)
         self.mesher = Mesher(cfg, args, self)

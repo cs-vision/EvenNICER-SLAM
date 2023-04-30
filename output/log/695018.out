@@ -1,0 +1,25 @@
+SLURM_JOB_ID:    695018
+Running on node: biwirender13
+Starting on:     Sun Apr 30 14:46:13 CEST 2023
+wandb: Currently logged in as: csvision. Use `wandb login --relogin` to force relogin
+wandb: WARNING Path ./output/wandb/wandb/ wasn't writable, using system temp directory.
+wandb: WARNING Path ./output/wandb/wandb/ wasn't writable, using system temp directory
+wandb: - Waiting for wandb.init()...wandb: \ Waiting for wandb.init()...wandb: wandb version 0.15.0 is available!  To upgrade, please run:
+wandb:  $ pip install wandb --upgrade
+wandb: Tracking run with wandb version 0.13.7
+wandb: Run data is saved locally in /tmp/wandb/run-20230430_144704-1oozn1yq
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run room0-gap5_blur9_20230430_144700
+wandb: ⭐️ View project at https://wandb.ai/csvision/EvenNICER-SLAM
+wandb: 🚀 View run at https://wandb.ai/csvision/EvenNICER-SLAM/runs/1oozn1yq
+Running on Replica_event dataset!
+Running on Replica_event dataset!
+Running on Replica_event dataset!
+Checkpoints will be saved every 500 frames!
+Running on Replica_event dataset!
+Checkpoints will be saved every 500 frames!
+Running on Replica_event dataset!
+INFO: The output folder is /scratch_net/biwidl311/shichen/evennicer-slam/EvenNICER-SLAM/output/evennicer-slam/Replica/room0-gap5_blur9
+INFO: The GT, generated and residual depth/color images can be found under /scratch_net/biwidl311/shichen/evennicer-slam/EvenNICER-SLAM/output/evennicer-slam/Replica/room0-gap5_blur9/tracking_vis/ and /scratch_net/biwidl311/shichen/evennicer-slam/EvenNICER-SLAM/output/evennicer-slam/Replica/room0-gap5_blur9/mapping_vis/
+INFO: The mesh can be found under /scratch_net/biwidl311/shichen/evennicer-slam/EvenNICER-SLAM/output/evennicer-slam/Replica/room0-gap5_blur9/mesh/
+INFO: The checkpoint can be found under /scratch_net/biwidl311/shichen/evennicer-slam/EvenNICER-SLAM/output/evennicer-slam/Replica/room0-gap5_blur9/ckpt/
