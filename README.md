@@ -52,7 +52,7 @@ Datasets
 ```
 and you can run EvenNICER-SLAM:
 ```bash
-python -W ignore run.py configs/Replica/room0.yaml
+python -W ignore run.py configs/Replica/room0.yaml --output output
 ```
 The mesh for evaluation is saved as `$OUTPUT_FOLDER/mesh/final_mesh_eval_rec.ply`, where the unseen regions are culled using all frames.
 
