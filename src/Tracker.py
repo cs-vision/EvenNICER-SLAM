@@ -156,32 +156,32 @@ class Tracker(object):
             # event_img = event_to_image(full_event.clone().detach().cpu().numpy())
             # event_img.save('fresh_event_prediction.png')
 
+        if rgbd:
+            batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color = get_samples(
+                Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, gt_color, self.device)
+            if self.nice:
+                # should pre-filter those out of bounding box depth value
+                with torch.no_grad():
+                    det_rays_o = batch_rays_o.clone().detach().unsqueeze(-1)  # (N, 3, 1)
+                    det_rays_d = batch_rays_d.clone().detach().unsqueeze(-1)  # (N, 3, 1)
+                    t = (self.bound.unsqueeze(0).to(device)-det_rays_o)/det_rays_d
+                    t, _ = torch.min(torch.max(t, dim=2)[0], dim=1)
+                    inside_mask = t >= batch_gt_depth
+                batch_rays_d = batch_rays_d[inside_mask]
+                batch_rays_o = batch_rays_o[inside_mask]
+                batch_gt_depth = batch_gt_depth[inside_mask]
+                batch_gt_color = batch_gt_color[inside_mask]
 
-        batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color = get_samples(
-            Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, gt_color, self.device)
-        if self.nice:
-            # should pre-filter those out of bounding box depth value
-            with torch.no_grad():
-                det_rays_o = batch_rays_o.clone().detach().unsqueeze(-1)  # (N, 3, 1)
-                det_rays_d = batch_rays_d.clone().detach().unsqueeze(-1)  # (N, 3, 1)
-                t = (self.bound.unsqueeze(0).to(device)-det_rays_o)/det_rays_d
-                t, _ = torch.min(torch.max(t, dim=2)[0], dim=1)
-                inside_mask = t >= batch_gt_depth
-            batch_rays_d = batch_rays_d[inside_mask]
-            batch_rays_o = batch_rays_o[inside_mask]
-            batch_gt_depth = batch_gt_depth[inside_mask]
-            batch_gt_color = batch_gt_color[inside_mask]
+            ret = self.renderer.render_batch_ray(
+                self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
+            depth, uncertainty, color = ret
 
-        ret = self.renderer.render_batch_ray(
-            self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
-        depth, uncertainty, color = ret
-
-        uncertainty = uncertainty.detach()
-        if self.handle_dynamic:
-            tmp = torch.abs(batch_gt_depth-depth)/torch.sqrt(uncertainty+1e-10)
-            mask = (tmp < 10*tmp.median()) & (batch_gt_depth > 0)
-        else:
-            mask = batch_gt_depth > 0
+            uncertainty = uncertainty.detach()
+            if self.handle_dynamic:
+                tmp = torch.abs(batch_gt_depth-depth)/torch.sqrt(uncertainty+1e-10)
+                mask = (tmp < 10*tmp.median()) & (batch_gt_depth > 0)
+            else:
+                mask = batch_gt_depth > 0
 
         # loss definition
         if rgbd:
