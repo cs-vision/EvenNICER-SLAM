@@ -3,6 +3,14 @@
 This is a repository based on NICE-SLAM.
 Please basically follow the README in their repo (https://github.com/cvg/nice-slam).
 
+## Installation
+
+Create and activate an environment `evennicer-slam` by running:
+```bash
+conda env create -f environment.yaml
+conda activate evennicer-slam
+```
+
 ## Datasets
 
 ### Replica
@@ -10,7 +18,8 @@ Download the data as below and the data is saved into the `./Datasets/Replica` f
 ```bash
 bash scripts/download_replica.sh
 ```
-Then you need an extra GT event image dataset (generated using ESIM), which can be downloaded here: https://polybox.ethz.ch/index.php/s/JEUIwGWFjdaWK4x
+Then you need an extra GT event image dataset (generated using ESIM), which can be downloaded here: https://polybox.ethz.ch/index.php/s/JEUIwGWFjdaWK4x (password: evennicer)
+
 The directory `./Datasets` should look like this:
 ```bash
 Datasets
