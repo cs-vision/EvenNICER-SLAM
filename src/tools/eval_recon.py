@@ -65,6 +65,7 @@ def check_proj(points, W, H, fx, fy, cx, cy, c2w):
 
     """
     c2w = c2w.copy()
+    # coodinatesが違うから？
     c2w[:3, 1] *= -1.0
     c2w[:3, 2] *= -1.0
     points = torch.from_numpy(points).cuda().clone()

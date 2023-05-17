@@ -23,8 +23,8 @@ def sample_pdf(bins, weights, N_samples, det=False, device='cuda:0'):
     """
     # Get pdf
     weights = weights + 1e-5  # prevent nans
-    pdf = weights / torch.sum(weights, -1, keepdim=True)
-    cdf = torch.cumsum(pdf, -1)
+    pdf = weights / torch.sum(weights, -1, keepdim=True) # probability density function
+    cdf = torch.cumsum(pdf, -1) # cumulative distribution function
     # (batch, len(bins))
     cdf = torch.cat([torch.zeros_like(cdf[..., :1]), cdf], -1)
 
