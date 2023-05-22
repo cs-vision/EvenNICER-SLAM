@@ -61,7 +61,7 @@ class Nerf_positional_embedding(torch.nn.Module):
         if self.include_input:
             output.append(x)
         for freq in freq_bands:
-            for p_fn in self.periodic_fns:
+            for p_fn in self.periodic_fns: # self.periodic_fns = [torch.sin, torch.cos]
                 output.append(p_fn(x * freq))
         ret = torch.cat(output, dim=1)
         return ret
