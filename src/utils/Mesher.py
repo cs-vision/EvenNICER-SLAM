@@ -17,7 +17,7 @@ class Mesher(object):
         Args:
             cfg (dict): parsed config dict.
             args (class 'argparse.Namespace'): argparse arguments.
-            slam (class NICE-SLAM): NICE-SLAM main class.
+            slam (class NICE-SLAM): EvenNICER-SLAM main class.
             points_batch_size (int): maximum points size for query in one batch. 
                                      Used to alleviate GPU memeory usage. Defaults to 500000.
             ray_batch_size (int): maximum ray size for query in one batch. 
