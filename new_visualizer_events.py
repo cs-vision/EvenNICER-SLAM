@@ -123,7 +123,7 @@ def main():
 
     gt_loggray_events = gt_loggray -  gt_pos * C_thres + gt_neg * C_thres
     gt_inverse_loggray = inverse_lin_log(gt_loggray_events)
-    gt_inverse_loggray_np = gt_inverse_loggray.cpu().numpy()
+    gt_inverse_loggray_np = gt_inverse_loggray.cpu().numpy().clip(0, 255)
 
     gt_residual_np = np.abs(gt_inverse_loggray_np - next_gt_gray_np)
 
