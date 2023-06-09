@@ -108,28 +108,32 @@ def main():
     gt_gray_np = (gt_gray*255).cpu().numpy()
     gt_loggray = lin_log(gt_gray*255, linlog_thres=20)
     gt_loggray_np = gt_loggray.cpu().numpy()
-
     experiment.log({
          'Gray': {'GT Gray' : wandb.Image(gt_gray_np)},
          'Gray_log' : {'GT LogGray' : wandb.Image(gt_loggray_np)},
     })
 
-    idx, next_gt_color, _, gt_event, gt_mask, gt_c2w = frame_reader[1] 
+    idx, next_gt_color, _, gt_event, _, _ = frame_reader[1] 
     next_gt_gray = rgb_to_luma(next_gt_color, esim=True)
     next_gt_gray_np = (next_gt_gray*255).cpu().numpy()
 
-    gt_pol = torch.unsqueeze(gt_event[:, :, 0] - gt_event[:, :, 1], dim=2)
-    C_thres = 0.1  #あとで修正
-    gt_loggaray = torch.sum(torch.stack([gt_loggray, gt_pol * C_thres]), dim=2)
-    gt_inverse_loggray = inverse_lin_log(gt_loggray)
-    gt_inverse_loggray_np = np.clip((gt_inverse_loggray.cpu().numpy())/255, 0, 1)
+    gt_pos = torch.unsqueeze(gt_event[:, :, 0] , dim = 2)
+    gt_neg = torch.unsqueeze(gt_event[:, :, 1] , dim = 2)
+    C_thres = 0.1  
+
+    gt_loggray_events = gt_loggray -  gt_pos * C_thres + gt_neg * C_thres
+    gt_inverse_loggray = inverse_lin_log(gt_loggray_events)
+    gt_inverse_loggray_np = gt_inverse_loggray.cpu().numpy()
+
+    gt_residual_np = np.abs(gt_inverse_loggray_np - next_gt_gray_np)
 
     gt_event_lores_np = gt_event.cpu().numpy()
     gt_event_lores_img = (np.concatenate([gt_event_lores_np, np.zeros_like(gt_event_lores_np[:, :, 0][:, :, None])], axis=-1)).clip(0, 1)
     experiment.log({
         'Gray' : {'GT Gray' : wandb.Image(next_gt_gray_np)},
         'Rendered Gray': {'Renderd Gray' : wandb.Image(gt_inverse_loggray_np)},
-        'Event' : {'Event': wandb.Image(gt_event_lores_img)}
+        'Event' : {'Event': wandb.Image(gt_event_lores_img)},
+        'Residual' : {'Residual': wandb.Image(gt_residual_np)}
     })
 
 
