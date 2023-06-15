@@ -40,8 +40,6 @@ class Visualizer(object):
         Visualization of depth, color, event images and save to file.
         """
         with torch.no_grad():
-            # idx : frame
-            # iter : sampling回数(10回)
             if (idx % self.freq == 0) and (iter % self.inside_freq == 0):
                 gt_depth_np = gt_depth.cpu().numpy()
                 gt_color_np = gt_color.cpu().numpy()
