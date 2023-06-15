@@ -201,8 +201,8 @@ class Tracker(object):
                               gt_color, gt_depth, gt_event,
                               batch_size, optimizer,
                               pre_gt_color,
-                              rgbd =True, 
-                              event=False):
+                              rgbd =False, 
+                              event=True):
         """
         Do one iteration of camera iteration. Sample pixels, render depth/color, calculate loss and backpropagation.
 
@@ -225,11 +225,10 @@ class Tracker(object):
         Hedge = self.ignore_edge_H
 
         # NOTE: gt_depth should be None (in if event:)
+        # NOTE: render_img takes so much time
         if event:
             _, _, full_color_current = self.renderer.render_img(self.c, self.decoders, c2w, self.device, stage='color', gt_depth=gt_depth)
             full_color_current = torch.clamp(full_color_current, 0, 1)
-            # full_color_current *= 255
-            print(full_color_current)
         
         if rgbd: 
             batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color = get_samples(
@@ -280,41 +279,45 @@ class Tracker(object):
         
         if event:
             # TODO  : define loss event 
-            # 1. pre_gt_color(batch), full_color_current をgray scale, log scale に変換
+            # 1. pre_gt_color(batch), full_color_current are converted to gray scale and log scale
       
             color_np = full_color_current.detach().cpu().numpy()
             color_np = np.clip(color_np, 0, 1)
             self.experiment.log({
-                'Color_from_event' : {'Color' : wandb.Image(color_np)}
+                'Rendered_Color' : {'Rendered_Color' : wandb.Image(color_np)}
             })
         
             rendered_gray = self.rgb_to_luma(full_color_current, esim=True)
-            gray_np = (rendered_gray*255).detach().cpu().numpy()
+            rendered_gray_log = self.lin_log(rendered_gray*255, linlog_thres=20)
+            rendered_gray_np = (rendered_gray*255).detach().cpu().numpy()
             self.experiment.log({
-                'Gray' : {'Gray' : wandb.Image(gray_np)}
+                'Rendered_Gray' : {'Rendered_Gray' : wandb.Image(rendered_gray_np)}
             })
             
             pre_gt_gray = self.rgb_to_luma(pre_gt_color, esim=True)
             pre_gt_loggray = self.lin_log(pre_gt_gray*255, linlog_thres=20)
 
-            # 2. pre_gt_gray(batch)にevent_accumulateを足す
+            # 2. add events to pre_gt_gray(batch)
             gt_pos = torch.unsqueeze(gt_event[:, :, 0] , dim = 2)
             gt_neg = torch.unsqueeze(gt_event[:, :, 1] , dim = 2)
             C_thres = 0.1
             gt_loggray_events = pre_gt_loggray -  gt_pos * C_thres + gt_neg * C_thres
             gt_inverse_loggray = self.inverse_lin_log(gt_loggray_events)
-            #print(gt_inverse_loggray)
+            gt_inverse_loggray_np = gt_inverse_loggray.cpu().numpy().clip(0, 255)
 
-            # 3. color(→gray)と2を比較してloss関数を定義 
+            # 3. define event_loss
             # loss_event = torch.abs(gt_inverse_loggray - rendered_gray).sum()
             loss_event = torch.abs(gt_inverse_loggray - rendered_gray*255).sum()
-            # print(loss_event)
+            loss_event_np = np.abs(gt_inverse_loggray_np - rendered_gray_np)
+            self.experiment.log({
+                'loss_event_np' : {'loss_event' : wandb.Image(loss_event_np)}
+                })
 
             balancer = self.cfg['event']['balancer'] # coefficient to balance event loss and rgbd loss
             loss_event = loss_event * balancer
 
             if self.activate_events:
-
+                # to fix the error : RuntimeError: element 0 of tensors does not require grad and does not have a grad_fn
                 loss_event.requires_grad = True
                 loss_event.backward()
             
@@ -335,7 +338,6 @@ class Tracker(object):
 
         """
         # shared_decoders, shared_c are shared in "tracking" and "mapping"
-        # shared itemsをself.trackerに持ってきている
         if self.mapping_idx[0] != self.prev_mapping_idx:
             if self.verbose:
                 print('Tracking: update the parameters from mapping')
@@ -364,7 +366,7 @@ class Tracker(object):
             gt_event = gt_event[0]
             gt_c2w = gt_c2w[0]
 
-            # ????? time.sleep(0.1)
+
             if self.sync_method == 'strict':
                 # strictly mapping and then tracking
                 # initiate mapping every self.every_frame frames
@@ -433,7 +435,6 @@ class Tracker(object):
                     gt_camera_tensor.to(device)-camera_tensor).mean().item()
                 candidate_cam_tensor = None
                 current_min_loss = 10000000000.
-                # ????? 
                 current_min_loss_event = 10000000000.
 
                 # add up gt_event_integrate asap
@@ -445,13 +446,13 @@ class Tracker(object):
 
                     rgbd_available = (idx % self.rgbd_every_frame == 0) # align with when mapping is dispatched
                     if rgbd_available:
-                        loss_rgbd, loss_event = self.optimize_cam_in_batch(camera_tensor, gt_color, gt_depth, gt_event, self.tracking_pixels, optimizer_camera,
+                        loss_rgbd, loss_event = self.optimize_cam_in_batch(camera_tensor, gt_color, gt_depth, gt_event_integrate, self.tracking_pixels, optimizer_camera,
                                                                            pre_gt_color, 
                                                                            rgbd=True, event=True)
                     else:
-                        loss_rgbd, loss_event = self.optimize_cam_in_batch(camera_tensor, gt_color, gt_depth, gt_event, self.tracking_pixels, optimizer_camera,
+                        loss_rgbd, loss_event = self.optimize_cam_in_batch(camera_tensor, gt_color, gt_depth, gt_event_integrate, self.tracking_pixels, optimizer_camera,
                                                                             pre_gt_color,
-                                                                           rgbd=True, event=True)
+                                                                           rgbd=False, event=True)
                     
                     print("RGBD loss: ", loss_rgbd)
                     print("Event loss : ", loss_event)
