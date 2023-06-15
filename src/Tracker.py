@@ -173,12 +173,12 @@ class Tracker(object):
 
         if event:
             # NOTE: gt_depth should be None (in if event:)
-            # NOTE: render_img takes so much time
+            # NOTE: render_img takes so much time → sampling
             # _, _, full_color_current = self.renderer.render_img(self.c, self.decoders, c2w, self.device, stage='color', gt_depth=gt_depth)
             # full_color_current = torch.clamp(full_color_current, 0, 1)
 
             
-            # TODO: gt_depth should be pre_gt_depth(accessible)
+            # TODO: gt_depth should be removed from input (unaccessible)
             batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
                 Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, self.device)
              
@@ -199,6 +199,8 @@ class Tracker(object):
                 self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
             _, uncertainty, rendered_color = ret_event
 
+
+            #TODO : shoule be removed 
             # rendered_color → full_current_color
             # batch_pre_gt_color　→ pre_gt_color
             # batch_gt_event → gt_event
@@ -262,22 +264,23 @@ class Tracker(object):
       
             color_np = full_color_current.detach().cpu().numpy()
             color_np = np.clip(color_np, 0, 1)
-            self.experiment.log({
-               'Rendered_Color' : {'Rendered_Color' : wandb.Image(color_np)}
-            })
+            # self.experiment.log({
+            #    'Rendered_Color' : {'Rendered_Color' : wandb.Image(color_np)}
+            # })
         
             rendered_gray = self.rgb_to_luma(full_color_current, esim=True)
-            #rendered_gray = self.rgb_to_luma(gt_color, esim=True)
             rendered_gray_log = self.lin_log(rendered_gray*255, linlog_thres=20)
             rendered_gray_np = (rendered_gray*255).detach().cpu().numpy()
-            self.experiment.log({
-                'Rendered_Gray' : {'Rendered_Gray' : wandb.Image(rendered_gray_np)}
-            })
+            # self.experiment.log({
+            #     'Rendered_Gray' : {'Rendered_Gray' : wandb.Image(rendered_gray_np)}
+            # })
             
             pre_gt_gray = self.rgb_to_luma(pre_gt_color, esim=True)
             pre_gt_loggray = self.lin_log(pre_gt_gray*255, linlog_thres=20)
 
             # 2. add events to pre_gt_gray(batch)
+
+            # ↓original
             # gt_pos = torch.unsqueeze(gt_event[:, :, 0] , dim = 2)
             # gt_neg = torch.unsqueeze(gt_event[:, :, 1] , dim = 2)
 
@@ -293,9 +296,9 @@ class Tracker(object):
             # 3. define event_loss
             loss_event = torch.abs(gt_inverse_loggray - rendered_gray*255).sum()
             loss_event_np = np.abs(gt_inverse_loggray_np - rendered_gray_np)
-            self.experiment.log({
-                'loss_event_np' : {'loss_event' : wandb.Image(loss_event_np)}
-                })
+            # self.experiment.log({
+            #     'loss_event_np' : {'loss_event' : wandb.Image(loss_event_np)}
+            #     })
 
             balancer = self.cfg['event']['balancer'] # coefficient to balance event loss and rgbd loss
             loss_event = loss_event * balancer
