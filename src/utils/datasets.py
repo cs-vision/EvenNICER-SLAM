@@ -88,7 +88,7 @@ class BaseDataset(Dataset):
             color_data = cv2.undistort(color_data, K, self.distortion)
 
         color_data = cv2.cvtColor(color_data, cv2.COLOR_BGR2RGB)
-        color_data = color_data / 255.
+        color_data = color_data / 255
         depth_data = depth_data.astype(np.float32) / self.png_depth_scale
         H, W = depth_data.shape
         color_data = cv2.resize(color_data, (W, H))
@@ -141,15 +141,30 @@ class Replica_event(Replica):
                  ):
         super(Replica_event, self).__init__(cfg, args, scale, device)
         print("Running on Replica_event dataset!")
+        # TODO : event_folder should be changed 
         if args.event_folder is None:
             self.event_folder = cfg['data']['event_folder']
         else:
             self.event_folder = args.event_folder
+        # self.event_paths = sorted(
+        #     glob.glob(f'{self.event_folder}/*frame*.png'))
+        # self.n_event = len(self.event_paths)
+        # # print(self.n_event, self.n_img)
+        # assert self.n_event == self.n_img - 1, f"Number of GT events does not match that of GT images!"
+
         self.event_paths = sorted(
-            glob.glob(f'{self.event_folder}/*frame*.png'))
-        self.n_event = len(self.event_paths)
-        # print(self.n_event, self.n_img)
-        assert self.n_event == self.n_img - 1, f"Number of GT events does not match that of GT images!"
+            glob.glob(f'{self.event_folder}/*events*.txt')
+        )
+
+        # あとで .to(self.device)する
+        # self.events = 
+
+
+    # TODO : self.events should be defined in def __init__()
+    # THEN  
+    # events = events(frame_reader) 
+    def __events__(self):
+        return self.events
 
     def __getitem__(self, index):
         color_path = self.color_paths[index]
@@ -166,7 +181,7 @@ class Replica_event(Replica):
             depth_data = readEXR_onlydepth(depth_path)
         if event_path is not None:
             event_data = cv2.imread(event_path) # png: [0, -, +], event_data: [+, -, 0]
-        else:
+        else: # when index == 0
             # return all black event image for the first frame
             event_data = np.zeros_like(color_data)
         if self.distortion is not None:
