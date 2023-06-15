@@ -190,17 +190,23 @@ class Tracker(object):
                     t = (self.bound.unsqueeze(0).to(device)-det_rays_o)/det_rays_d
                     t, _ = torch.min(torch.max(t, dim=2)[0], dim=1)
                     inside_mask = t >= batch_gt_depth
-                batch_rays_d = batch_rays_d[inside_mask]
-                batch_rays_o = batch_rays_o[inside_mask]
-                batch_pre_gt_color = batch_pre_gt_color[inside_mask]
-                batch_gt_event = batch_gt_event[inside_mask]
+
+                    # NOTE : to see the effect of mask
+                    num_true = torch.sum(inside_mask).item()
+                    num_false = torch.sum(~inside_mask).item()
+                    print(num_true)
+                    print(num_false)
+                # batch_rays_d = batch_rays_d[inside_mask]
+                # batch_rays_o = batch_rays_o[inside_mask]
+                # batch_pre_gt_color = batch_pre_gt_color[inside_mask]
+                # batch_gt_event = batch_gt_event[inside_mask]
 
             ret_event = self.renderer.render_batch_ray(
                 self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
             _, uncertainty, rendered_color = ret_event
 
 
-            #TODO : shoule be removed 
+            # TODO : shoule be removed 
             # rendered_color → full_current_color
             # batch_pre_gt_color　→ pre_gt_color
             # batch_gt_event → gt_event
@@ -283,8 +289,8 @@ class Tracker(object):
             # ↓original
             # gt_pos = torch.unsqueeze(gt_event[:, :, 0] , dim = 2)
             # gt_neg = torch.unsqueeze(gt_event[:, :, 1] , dim = 2)
-
             # after sampling. gt_event != (H, W ,2)
+
             gt_pos = torch.unsqueeze(gt_event[:, 0] , dim = 1)
             gt_neg = torch.unsqueeze(gt_event[:, 1] , dim = 1)
 
@@ -296,16 +302,11 @@ class Tracker(object):
             # 3. define event_loss
             loss_event = torch.abs(gt_inverse_loggray - rendered_gray*255).sum()
             loss_event_np = np.abs(gt_inverse_loggray_np - rendered_gray_np)
-            # self.experiment.log({
-            #     'loss_event_np' : {'loss_event' : wandb.Image(loss_event_np)}
-            #     })
 
             balancer = self.cfg['event']['balancer'] # coefficient to balance event loss and rgbd loss
             loss_event = loss_event * balancer
 
             if self.activate_events:
-                # to fix the error : RuntimeError: element 0 of tensors does not require grad and does not have a grad_fn
-                # loss_event.requires_grad = True
                 loss_event.backward()
             
             loss_event_item = loss_event.item()
@@ -313,7 +314,6 @@ class Tracker(object):
         else:
             loss_event_item = None
             
-    
         optimizer.step()
         optimizer.zero_grad()
 
@@ -492,9 +492,7 @@ class Tracker(object):
 
                                 self.experiment.log(dict_log)
 
-                    # TODO 
                     # use event loss as criteria because it is always available
-                    
                     if loss_event < current_min_loss_event:
                         current_min_loss_event = loss_event
                         candidate_cam_tensor = camera_tensor.clone().detach()

@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH  --output=/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/output/log/%j.out
-#SBATCH  --error=/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/output/log/%j.out
+#SBATCH  --output=/scratch_net/biwidl311/shichen/evennicer-slam/EvenNICER-SLAM/output/log/%j.out
+#SBATCH  --error=/scratch_net/biwidl311/shichen/evennicer-slam/EvenNICER-SLAM/output/log/%j.out
 #SBATCH  --gres=gpu:1
 #SBATCH  --mem=40G
 #SBATCH  --constraint='titan_xp'
@@ -9,13 +9,13 @@ JOB_START_TIME=$(date)
 echo "SLURM_JOB_ID:    ${SLURM_JOB_ID}" 
 echo "Running on node: $(hostname)"
 echo "Starting on:     ${JOB_START_TIME}" 
-source /itet-stor/myamaguchi/net_scratch/conda/etc/profile.d/conda.sh
+source /scratch_net/biwidl311/shichen/conda/etc/profile.d/conda.sh
 conda activate evennicer-slam
 
 # Add RPG dataset in the future
 datasets=("Replica")
 replica_scenes=("room0" "room1" "room2" "office0" "office1" "office2" "office3" "office4")
-output_affix="/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/output"
+output_affix="/scratch_net/biwidl311/shichen/evennicer-slam/EvenNICER-SLAM/output"
 
 method="evennicer-slam"
 dataset=${datasets[0]}

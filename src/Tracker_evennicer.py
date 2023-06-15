@@ -101,7 +101,7 @@ class Tracker(object):
         self.rgbd_every_frame = cfg['event']['rgbd_every_frame']
 
 
-    def optimize_cam_in_batch(self, camera_tensor, 
+    def  optimize_cam_in_batch(self, camera_tensor, 
                               pre_c2w,
                               gt_color, gt_depth, gt_event,
                               gt_mask,

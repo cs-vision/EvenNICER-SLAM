@@ -14,10 +14,6 @@ from src.common import (get_camera_from_tensor, get_samples,
 from src.utils.datasets import get_dataset
 from src.utils.Visualizer import Visualizer
 
-# event net
-from src.event_net import inference_event
-
-
 class Mapper(object):
     """
     Mapper thread. Note that coarse mapper also uses this code.
@@ -94,7 +90,7 @@ class Mapper(object):
         self.slam = slam
         self.experiment = slam.experiment
 
-        self.scale_factor = slam.scale_factor
+        # self.scale_factor = slam.scale_factor
 
         if 'Demo' not in self.output:  # disable this visualization in demo
             self.visualizer = Visualizer(freq=cfg['mapping']['vis_freq'], 
@@ -108,7 +104,7 @@ class Mapper(object):
         self.H, self.W, self.fx, self.fy, self.cx, self.cy = slam.H, slam.W, slam.fx, slam.fy, slam.cx, slam.cy
 
         # event-net loading
-        self.event_net = slam.event_net
+        # self.event_net = slam.event_net
 
         print(f'Checkpoints will be saved every {self.ckpt_freq} frames!')
 
@@ -252,7 +248,7 @@ class Mapper(object):
     def optimize_map(self, num_joint_iters, lr_factor, idx, cur_gt_color, cur_gt_depth, cur_gt_event, gt_cur_c2w, 
                      keyframe_dict, keyframe_list, cur_c2w, pre_c2w, 
                      pre_gt_color,
-                     rgbd=True, event=False, scale_factor=0.1):
+                     rgbd=True, event=False):
         """
         Mapping iterations. Sample pixels from selected keyframes,
         then optimize scene representation and camera poses(if local BA enabled).
@@ -263,6 +259,7 @@ class Mapper(object):
             idx (int): the index of current frame
             cur_gt_color (tensor): gt_color image of the current camera.
             cur_gt_depth (tensor): gt_depth image of the current camera.
+            cur_gt_event : ??
             gt_cur_c2w (tensor): groundtruth camera to world matrix corresponding to current frame.
             keyframe_dict (list): list of keyframes info dictionary.
             keyframe_list (list): list ofkeyframe index.
@@ -433,17 +430,17 @@ class Mapper(object):
             from torch.optim.lr_scheduler import StepLR
             scheduler = StepLR(optimizer, step_size=200, gamma=0.8)
 
-        if event:
-            # gt event rescale
-            gt_event_integrate = cur_gt_event
-            gt_event_integrate = gt_event_integrate.to(self.device).permute(2, 0, 1)
-            p, h, w = gt_event_integrate.shape
-            h_new, w_new = int(scale_factor * h), int(scale_factor * w)
-            assert h_new > 0 and w_new > 0, 'Scale is too small, resized images would have no pixels'
-            # transform = transforms.Resize((h_new, w_new), interpolation=transforms.InterpolationMode.BILINEAR)
-            transform = transforms.Resize((h_new, w_new), interpolation=transforms.InterpolationMode.NEAREST)
-            gt_event_integrate_lores = transform(gt_event_integrate).permute(1, 2, 0)
-            gt_event_integrate = gt_event_integrate.permute(1, 2, 0)
+        # if event:
+        #     # gt event rescale
+        #     gt_event_integrate = cur_gt_event
+        #     gt_event_integrate = gt_event_integrate.to(self.device).permute(2, 0, 1)
+        #     p, h, w = gt_event_integrate.shape
+        #     h_new, w_new = int(scale_factor * h), int(scale_factor * w)
+        #     assert h_new > 0 and w_new > 0, 'Scale is too small, resized images would have no pixels'
+        #     # transform = transforms.Resize((h_new, w_new), interpolation=transforms.InterpolationMode.BILINEAR)
+        #     transform = transforms.Resize((h_new, w_new), interpolation=transforms.InterpolationMode.NEAREST)
+        #     gt_event_integrate_lores = transform(gt_event_integrate).permute(1, 2, 0)
+        #     gt_event_integrate = gt_event_integrate.permute(1, 2, 0)
 
         for joint_iter in range(num_joint_iters):
             if self.nice:
@@ -579,55 +576,55 @@ class Mapper(object):
             else:
                 loss_rgbd_item = None
 
-            if event:
+            # if event:
                 optimizer_event.zero_grad()
 
             # render two images and generate event
-            if event:
-                full_color_previous = transform(pre_gt_color.permute(2, 0, 1)).permute(1, 2, 0)
+            # if event:
+            #     full_color_previous = transform(pre_gt_color.permute(2, 0, 1)).permute(1, 2, 0)
 
-                if self.low_gpu_mem:
-                    torch.cuda.empty_cache()
-                _, _, full_color_current = self.renderer.render_img_rescale(self.c, self.decoders, cur_c2w, self.device, stage='color', gt_depth=gt_depth, scale_factor=scale_factor)
-                full_event, event_mask = inference_event(net=self.event_net, img1=full_color_previous, img2=full_color_current, device=device, scale_factor=1.0, out_threshold=0.5)
-                loss_event = ((gt_event_integrate_lores - full_event)**2).sum() # try l2 loss
+            #     if self.low_gpu_mem:
+            #         torch.cuda.empty_cache()
+            #     _, _, full_color_current = self.renderer.render_img_rescale(self.c, self.decoders, cur_c2w, self.device, stage='color', gt_depth=gt_depth, scale_factor=scale_factor)
+            #     full_event, event_mask = inference_event(net=self.event_net, img1=full_color_previous, img2=full_color_current, device=device, scale_factor=1.0, out_threshold=0.5)
+            #     loss_event = ((gt_event_integrate_lores - full_event)**2).sum() # try l2 loss
 
-                # This part is hardcoded for now. Better be soft when event loss for mapper is successful.
-                blur = True
-                if blur:
-                    # up till now only using 5 blur (no clear image) worked the best
-                    kernel_sizes = [3]
-                    no_blur_weight = 0
-                    size_weights = [1] # should be smaller with respect to RGBD loss?
-                    gts_event_list = []
-                    preds_event_list = []
-                    losses_event_list = [no_blur_weight * loss_event]
-                    for kernel_size, size_weight in zip(kernel_sizes, size_weights):
-                        gt_event_tmp = transforms.functional.gaussian_blur(gt_event_integrate_lores.permute(2, 0, 1), kernel_size=kernel_size).permute(1, 2, 0)
-                        full_event_tmp = transforms.functional.gaussian_blur(full_event.permute(2, 0, 1), kernel_size=kernel_size).permute(1, 2, 0)
-                        # loss_event_tmp = torch.abs(gt_event_tmp - full_event_tmp).sum() # l1 loss first, don't want anyone of them be dominant
-                        # loss_event_tmp = torch.abs(gt_event_tmp - full_event).sum() # try only blur gt
-                        loss_event_tmp = ((gt_event_tmp - full_event_tmp)**2).sum() # blur both, l2 loss
-                        # loss_event_tmp = ((gt_event_tmp - full_event)**2).sum() # try only blur gt, l2 loss
-                        loss_event += size_weight * loss_event_tmp
-                        gts_event_list.append(gt_event_tmp)
-                        preds_event_list.append(full_event_tmp)
-                        losses_event_list.append(loss_event_tmp.item())
+            #     # This part is hardcoded for now. Better be soft when event loss for mapper is successful.
+            #     blur = True
+            #     if blur:
+            #         # up till now only using 5 blur (no clear image) worked the best
+            #         kernel_sizes = [3]
+            #         no_blur_weight = 0
+            #         size_weights = [1] # should be smaller with respect to RGBD loss?
+            #         gts_event_list = []
+            #         preds_event_list = []
+            #         losses_event_list = [no_blur_weight * loss_event]
+            #         for kernel_size, size_weight in zip(kernel_sizes, size_weights):
+            #             gt_event_tmp = transforms.functional.gaussian_blur(gt_event_integrate_lores.permute(2, 0, 1), kernel_size=kernel_size).permute(1, 2, 0)
+            #             full_event_tmp = transforms.functional.gaussian_blur(full_event.permute(2, 0, 1), kernel_size=kernel_size).permute(1, 2, 0)
+            #             # loss_event_tmp = torch.abs(gt_event_tmp - full_event_tmp).sum() # l1 loss first, don't want anyone of them be dominant
+            #             # loss_event_tmp = torch.abs(gt_event_tmp - full_event).sum() # try only blur gt
+            #             loss_event_tmp = ((gt_event_tmp - full_event_tmp)**2).sum() # blur both, l2 loss
+            #             # loss_event_tmp = ((gt_event_tmp - full_event)**2).sum() # try only blur gt, l2 loss
+            #             loss_event += size_weight * loss_event_tmp
+            #             gts_event_list.append(gt_event_tmp)
+            #             preds_event_list.append(full_event_tmp)
+            #             losses_event_list.append(loss_event_tmp.item())
 
-                balancer = (pixs_per_image*len(optimize_frame)) / (w_new*h_new) /100 # coefficient to balance event loss and rgbd loss
-                loss_event = loss_event * balancer
+            #     balancer = (pixs_per_image*len(optimize_frame)) / (w_new*h_new) /100 # coefficient to balance event loss and rgbd loss
+            #     loss_event = loss_event * balancer
 
-                loss_event.backward(retain_graph=True)
+            #     loss_event.backward(retain_graph=True)
 
-                optimizer_event.step()
-                loss_event_item = loss_event.item()
+            #     optimizer_event.step()
+            #     loss_event_item = loss_event.item()
 
             if not self.nice:
                 # for imap*
                 scheduler.step()
             optimizer.zero_grad()
-            if event:
-                optimizer_event.zero_grad()
+            # if event:
+            #     optimizer_event.zero_grad()
 
             # put selected and updated features back to the grid
             if self.nice and self.frustum_feature_selection:
@@ -643,46 +640,46 @@ class Mapper(object):
             # verbose the losses
             if joint_iter == 0 and rgbd:
                 initial_loss_rgbd = loss_rgbd_item
-            if joint_iter == 0 and event:
-                initial_loss_event = loss_event_item
-                initial_losses_event_blur = losses_event_list
+            # if joint_iter == 0 and event:
+            #     initial_loss_event = loss_event_item
+            #     initial_losses_event_blur = losses_event_list
 
-            if self.verbose and event and rgbd:
-                if joint_iter == num_joint_iters-1:
-                    print(
-                        f'RGBD loss: {initial_loss_rgbd:.2f}->{loss_rgbd_item:.2f} ' +
-                        f'event loss: {initial_loss_event:.2f}->{loss_event_item:.2f} ')
+            # if self.verbose and event and rgbd:
+            #     if joint_iter == num_joint_iters-1:
+            #         print(
+            #             f'RGBD loss: {initial_loss_rgbd:.2f}->{loss_rgbd_item:.2f} ' +
+            #             f'event loss: {initial_loss_event:.2f}->{loss_event_item:.2f} ')
 
-                    if idx != 0:
-                        # wandb logging
-                        if self.coarse_mapper:
-                            dict_log = {
-                                'RGBD loss (Coarse mapper)': loss_rgbd_item,
-                                'RGBD loss improvement (Coarse mapper)': initial_loss_rgbd - loss_rgbd_item,
-                                'Event loss (Coarse mapper)': loss_event_item,
-                                'Event loss improvement (Coarse mapper)': initial_loss_event - loss_event_item,
-                                'Frame': idx
-                            }
-                            for blur_level, loss_event_blur in enumerate(losses_event_list):
-                                dict_log[f'Event loss blur {blur_level} (Coarse mapper)'] = loss_event_blur
-                                dict_log[f'Event loss blur {blur_level} improvement (Coarse mapper)'] = initial_losses_event_blur[blur_level] - loss_event_blur
+            #         if idx != 0:
+            #             # wandb logging
+            #             if self.coarse_mapper:
+            #                 dict_log = {
+            #                     'RGBD loss (Coarse mapper)': loss_rgbd_item,
+            #                     'RGBD loss improvement (Coarse mapper)': initial_loss_rgbd - loss_rgbd_item,
+            #                     'Event loss (Coarse mapper)': loss_event_item,
+            #                     'Event loss improvement (Coarse mapper)': initial_loss_event - loss_event_item,
+            #                     'Frame': idx
+            #                 }
+            #                 for blur_level, loss_event_blur in enumerate(losses_event_list):
+            #                     dict_log[f'Event loss blur {blur_level} (Coarse mapper)'] = loss_event_blur
+            #                     dict_log[f'Event loss blur {blur_level} improvement (Coarse mapper)'] = initial_losses_event_blur[blur_level] - loss_event_blur
 
-                            self.experiment.log(dict_log)
-                        else:
-                            dict_log = {
-                                'RGBD loss (Mapper)': loss_rgbd_item,
-                                'RGBD loss improvement (Mapper)': initial_loss_rgbd - loss_rgbd_item,
-                                'Event loss (Mapper)': loss_event_item,
-                                'Event loss improvement (Mapper)': initial_loss_event - loss_event_item,
-                                'Frame': idx
-                            }
-                            for blur_level, loss_event_blur in enumerate(losses_event_list):
-                                dict_log[f'Event loss blur {blur_level} (Mapper)'] = loss_event_blur
-                                dict_log[f'Event loss blur {blur_level} improvement (Mapper)'] = initial_losses_event_blur[blur_level] - loss_event_blur
+            #                 self.experiment.log(dict_log)
+            #             else:
+            #                 dict_log = {
+            #                     'RGBD loss (Mapper)': loss_rgbd_item,
+            #                     'RGBD loss improvement (Mapper)': initial_loss_rgbd - loss_rgbd_item,
+            #                     'Event loss (Mapper)': loss_event_item,
+            #                     'Event loss improvement (Mapper)': initial_loss_event - loss_event_item,
+            #                     'Frame': idx
+            #                 }
+            #                 for blur_level, loss_event_blur in enumerate(losses_event_list):
+            #                     dict_log[f'Event loss blur {blur_level} (Mapper)'] = loss_event_blur
+            #                     dict_log[f'Event loss blur {blur_level} improvement (Mapper)'] = initial_losses_event_blur[blur_level] - loss_event_blur
 
-                            self.experiment.log(dict_log)
+            #                 self.experiment.log(dict_log)
 
-            elif self.verbose and rgbd:
+            if self.verbose and rgbd:
                 if joint_iter == num_joint_iters-1:
                     print(
                         f'RGBD loss: {initial_loss_rgbd:.2f}->{loss_rgbd_item:.2f} ')
@@ -703,14 +700,14 @@ class Mapper(object):
                             })
 
             if (not (idx == 0 and self.no_vis_on_first_frame)) and ('Demo' not in self.output):
-                if event:
-                    self.visualizer.vis_event(
-                        idx, joint_iter, cur_gt_depth, cur_gt_color, gt_event_integrate, gt_event_integrate_lores, full_event, 
-                        gts_event_list, preds_event_list, 
-                        cur_c2w, c, self.decoders)
-                else:
-                    self.visualizer.vis(
-                        idx, joint_iter, cur_gt_depth, cur_gt_color, cur_c2w, c, self.decoders)
+                # if event:
+                #     self.visualizer.vis_event(
+                #         idx, joint_iter, cur_gt_depth, cur_gt_color, gt_event_integrate, gt_event_integrate_lores, full_event, 
+                #         gts_event_list, preds_event_list, 
+                #         cur_c2w, c, self.decoders)
+                #else:
+                self.visualizer.vis(
+                    idx, joint_iter, cur_gt_depth, cur_gt_color, cur_c2w, c, self.decoders)
 
         if self.BA:
             # put the updated camera poses back
@@ -812,7 +809,7 @@ class Mapper(object):
                                           gt_c2w, 
                                           self.keyframe_dict, self.keyframe_list, cur_c2w=cur_c2w, pre_c2w=pre_c2w,
                                           pre_gt_color=gt_color, 
-                                          rgbd=True, event=False, scale_factor=self.scale_factor)
+                                          rgbd=True, event=False)
                 else:
                     if self.coarse_mapper:
                         pre_gt_color = gt_color # placeholder, unused
@@ -820,7 +817,7 @@ class Mapper(object):
                                           gt_c2w, 
                                           self.keyframe_dict, self.keyframe_list, cur_c2w=cur_c2w, pre_c2w=pre_c2w,
                                           pre_gt_color=pre_gt_color, 
-                                          rgbd=True, event=False, scale_factor=self.scale_factor)
+                                          rgbd=True, event=False)
 
                 if self.BA:
                     cur_c2w = _

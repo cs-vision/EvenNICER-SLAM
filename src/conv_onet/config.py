@@ -8,6 +8,7 @@ def get_model(cfg,  nice=True):
     Args:
         cfg (dict): imported yaml config.
         nice (bool, optional): whether or not use Neural Implicit Scalable Encoding. Defaults to False.
+        # Defaults to Trueでは？
 
     Returns:
         decoder (nn.module): the network model.
