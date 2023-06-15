@@ -14,61 +14,65 @@ from src.common import (get_camera_from_tensor, get_samples,
 from src.utils.datasets import get_dataset
 from src.utils.Visualizer import Visualizer
 
-# TODO : e-sim classにしてimportする
-def rgb_to_luma(rgb, esim=True):
-    """
-    Input:
-    :rgb torch.Tensor (N_evs, 3)
+#wandb
+# TODO : wandb should be in Visualizer class
+import wandb
 
-    Output:
-    :luma torch.Tensor (N_evs, 1)
-    :esim Use luma-conversion-coefficients from esim, else from v2e-paper.
-    "ITU-R recommendation BT.709 digital video (linear, non-gamma-corrected) color space conversion"
-    see https://gist.github.com/yohhoy/dafa5a47dade85d8b40625261af3776a
-    or https://mymusing.co/bt-709-yuv-to-rgb-conversion-color/ for numbers
-    """
+# # TODO : e-sim classにしてimportする
+# def rgb_to_luma(self, rgb, esim=True):
+#     """
+#     Input:
+#     :rgb torch.Tensor (N_evs, 3)
+
+#     Output:
+#     :luma torch.Tensor (N_evs, 1)
+#     :esim Use luma-conversion-coefficients from esim, else from v2e-paper.
+#     "ITU-R recommendation BT.709 digital video (linear, non-gamma-corrected) color space conversion"
+#     see https://gist.github.com/yohhoy/dafa5a47dade85d8b40625261af3776a
+#     or https://mymusing.co/bt-709-yuv-to-rgb-conversion-color/ for numbers
+#     """
 
 
-    if esim:
-        #  https://github.com/uzh-rpg/rpg_esim/blob/4cf0b8952e9f58f674c3098f1b027a4b6db53427/event_camera_simulator/imp/imp_opengl_renderer/src/opengl_renderer.cpp#L319-L321
-        #  image format esim: https://github.com/uzh-rpg/rpg_esim/blob/4cf0b8952e9f58f674c3098f1b027a4b6db53427/event_camera_simulator/esim_visualization/src/ros_utils.cpp#L29-L36
-        #  color conv factorsr rgb->gray: https://docs.opencv.org/3.4/de/d25/imgproc_color_conversions.html
-        r = 0.299
-        g = 0.587
-        b = 0.114
-    else:
-        r = 0.2126
-        g = 0.7152
-        b = 0.0722
+#     if esim:
+#         #  https://github.com/uzh-rpg/rpg_esim/blob/4cf0b8952e9f58f674c3098f1b027a4b6db53427/event_camera_simulator/imp/imp_opengl_renderer/src/opengl_renderer.cpp#L319-L321
+#         #  image format esim: https://github.com/uzh-rpg/rpg_esim/blob/4cf0b8952e9f58f674c3098f1b027a4b6db53427/event_camera_simulator/esim_visualization/src/ros_utils.cpp#L29-L36
+#         #  color conv factorsr rgb->gray: https://docs.opencv.org/3.4/de/d25/imgproc_color_conversions.html
+#         r = 0.299
+#         g = 0.587
+#         b = 0.114
+#     else:
+#         r = 0.2126
+#         g = 0.7152
+#         b = 0.0722
 
-    factors = torch.Tensor([r, g, b]).cpu()  # (3)
-    luma = torch.sum(rgb * factors[None, :], axis=-1)  # (N_evs, 3) * (1, 3) => (N_evs)
-    return luma[..., None]  # (N_evs, 1)
+#     factors = torch.Tensor([r, g, b]).to(self.device)# .cpu()  # (3)
+#     luma = torch.sum(rgb * factors[None, :], axis=-1)  # (N_evs, 3) * (1, 3) => (N_evs)
+#     return luma[..., None]  # (N_evs, 1)
 
-def lin_log(color, linlog_thres=20):
-    """
-    Input: 
-    :color torch.Tensor of (N_rand_events, 1 or 3). 1 if use_luma, else 3 (rgb).
-           We pass rgb here, if we want to treat r,g,b separately in the loss (each pixel must obey event constraint).
-    """
-    # Compute the required slope for linear region (below luma_thres)
-    # we need natural log (v2e writes ln and "it comes from exponential relation")
-    lin_slope = np.log(linlog_thres) / linlog_thres
+# def lin_log(self, color, linlog_thres=20):
+#     """
+#     Input: 
+#     :color torch.Tensor of (N_rand_events, 1 or 3). 1 if use_luma, else 3 (rgb).
+#            We pass rgb here, if we want to treat r,g,b separately in the loss (each pixel must obey event constraint).
+#     """
+#     # Compute the required slope for linear region (below luma_thres)
+#     # we need natural log (v2e writes ln and "it comes from exponential relation")
+#     lin_slope = np.log(linlog_thres) / linlog_thres
 
-    # Peform linear-map for smaller thres, and log-mapping for above thresh
-    lin_log_rgb = torch.where(color < linlog_thres, lin_slope * color, torch.log(color))
-    return lin_log_rgb
+#     # Peform linear-map for smaller thres, and log-mapping for above thresh
+#     lin_log_rgb = torch.where(color < linlog_thres, lin_slope * color, torch.log(color))
+#     return lin_log_rgb
 
-def inverse_lin_log(lin_log_rgb, linlog_thres=20):
-    lin_slope = np.log(linlog_thres) / linlog_thres
+# def inverse_lin_log(lin_log_rgb, linlog_thres=20):
+#     lin_slope = np.log(linlog_thres) / linlog_thres
 
-    # Perform inverse linear mapping for values below linlog_thres
-    inverse_lin_log_rgb = torch.where(
-        lin_log_rgb < lin_slope * linlog_thres,
-        lin_log_rgb / lin_slope,
-        torch.exp(lin_log_rgb)
-    )
-    return inverse_lin_log_rgb
+#     # Perform inverse linear mapping for values below linlog_thres
+#     inverse_lin_log_rgb = torch.where(
+#         lin_log_rgb < lin_slope * linlog_thres,
+#         lin_log_rgb / lin_slope,
+#         torch.exp(lin_log_rgb)
+#     )
+#     return inverse_lin_log_rgb
 
 
 class Tracker(object):
@@ -118,18 +122,87 @@ class Tracker(object):
             cfg, args, self.scale, device=self.device)
         self.n_img = len(self.frame_reader)
         self.frame_loader = DataLoader(
-            self.frame_reader, batch_size=1, shuffle=False, num_workers=1)
+            self.frame_reader, batch_size=1, shuffle=False, num_workers=0) # to avoid "RuntimeError: unable to mmap 128 bytes from file </torch_6409_1637078694_63344>: Cannot allocate memory (12)"
+        
+        self.slam = slam
+
+        # wandb
+        self.experiment = slam.experiment
+
         self.visualizer = Visualizer(freq=cfg['tracking']['vis_freq'], inside_freq=cfg['tracking']['vis_inside_freq'],
                                      vis_dir=os.path.join(self.output, 'vis' if 'Demo' in self.output else 'tracking_vis'),
-                                     renderer=self.renderer, verbose=self.verbose, device=self.device)
+                                     renderer=self.renderer, verbose=self.verbose, 
+                                     experiment = self.experiment, # wabdn
+                                     device=self.device,
+                                     stage = 'tracker')
         self.H, self.W, self.fx, self.fy, self.cx, self.cy = slam.H, slam.W, slam.fx, slam.fy, slam.cx, slam.cy
+
+        self.activate_events = cfg['event']['activate_events']
+
+        # RGBD available condition
+        self.rgbd_every_frame = cfg['event']['rgbd_every_frame']
+
+    # TODO : e-sim classにしてimportする
+    def rgb_to_luma(self, rgb, esim=True):
+        """
+        Input:
+        :rgb torch.Tensor (N_evs, 3)
+
+        Output:
+        :luma torch.Tensor (N_evs, 1)
+        :esim Use luma-conversion-coefficients from esim, else from v2e-paper.
+        "ITU-R recommendation BT.709 digital video (linear, non-gamma-corrected) color space conversion"
+        see https://gist.github.com/yohhoy/dafa5a47dade85d8b40625261af3776a
+        or https://mymusing.co/bt-709-yuv-to-rgb-conversion-color/ for numbers
+        """
+
+
+        if esim:
+            #  https://github.com/uzh-rpg/rpg_esim/blob/4cf0b8952e9f58f674c3098f1b027a4b6db53427/event_camera_simulator/imp/imp_opengl_renderer/src/opengl_renderer.cpp#L319-L321
+            #  image format esim: https://github.com/uzh-rpg/rpg_esim/blob/4cf0b8952e9f58f674c3098f1b027a4b6db53427/event_camera_simulator/esim_visualization/src/ros_utils.cpp#L29-L36
+            #  color conv factorsr rgb->gray: https://docs.opencv.org/3.4/de/d25/imgproc_color_conversions.html
+            r = 0.299
+            g = 0.587
+            b = 0.114
+        else:
+            r = 0.2126
+            g = 0.7152
+            b = 0.0722
+
+        factors = torch.Tensor([r, g, b]).to(self.device)# .cpu()  # (3)
+        luma = torch.sum(rgb * factors[None, :], axis=-1)  # (N_evs, 3) * (1, 3) => (N_evs)
+        return luma[..., None]  # (N_evs, 1)
+    
+    def lin_log(self, color, linlog_thres=20):
+        """
+        Input: 
+        :color torch.Tensor of (N_rand_events, 1 or 3). 1 if use_luma, else 3 (rgb).
+            We pass rgb here, if we want to treat r,g,b separately in the loss (each pixel must obey event constraint).
+        """
+        # Compute the required slope for linear region (below luma_thres)
+        # we need natural log (v2e writes ln and "it comes from exponential relation")
+        lin_slope = np.log(linlog_thres) / linlog_thres
+        # Peform linear-map for smaller thres, and log-mapping for above thresh
+        lin_log_rgb = torch.where(color < linlog_thres, lin_slope * color, torch.log(color))
+        return lin_log_rgb
+    
+    def inverse_lin_log(self, lin_log_rgb, linlog_thres=20):
+        lin_slope = np.log(linlog_thres) / linlog_thres
+
+        # Perform inverse linear mapping for values below linlog_thres
+        inverse_lin_log_rgb = torch.where(
+            lin_log_rgb < lin_slope * linlog_thres,
+            lin_log_rgb / lin_slope,
+            torch.exp(lin_log_rgb)
+        )
+        return inverse_lin_log_rgb
 
     def optimize_cam_in_batch(self, camera_tensor, 
                               gt_color, gt_depth, gt_event,
                               batch_size, optimizer,
                               pre_gt_color,
-                              rgbd=True, # 毎回rgbdが与えられるわけじゃない
-                              event=True):
+                              rgbd =True, 
+                              event=False):
         """
         Do one iteration of camera iteration. Sample pixels, render depth/color, calculate loss and backpropagation.
 
@@ -150,7 +223,15 @@ class Tracker(object):
         c2w = get_camera_from_tensor(camera_tensor)
         Wedge = self.ignore_edge_W
         Hedge = self.ignore_edge_H
-        if rgbd:
+
+        # NOTE: gt_depth should be None (in if event:)
+        if event:
+            _, _, full_color_current = self.renderer.render_img(self.c, self.decoders, c2w, self.device, stage='color', gt_depth=gt_depth)
+            full_color_current = torch.clamp(full_color_current, 0, 1)
+            # full_color_current *= 255
+            print(full_color_current)
+        
+        if rgbd: 
             batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color = get_samples(
                 Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, gt_color, self.device)
             if self.nice:
@@ -191,32 +272,50 @@ class Tracker(object):
                 loss_rgbd.backward(retain_graph=True) # https://stackoverflow.com/questions/46774641/what-does-the-parameter-retain-graph-mean-in-the-variables-backward-method
             else:
                 loss_rgbd.backward(retain_graph=False)
+
+            loss_rgbd_item = loss_rgbd.item()
         
         else:
             loss_rgbd_item = None
         
         if event:
             # TODO  : define loss event 
-            # 1. pre_gt_color(batch), gt_color をgray scale, log scale に変換
-            gt_gray = rgb_to_luma(gt_color, esim=True)
-            # gt_loggray = lin_log(gt_gray*255, linlog_thres=20)
-            pre_gt_gray = rgb_to_luma(pre_gt_color, esim=True)
-            pre_gt_loggray = lin_log(pre_gt_gray*255, linlog_thres=20)
+            # 1. pre_gt_color(batch), full_color_current をgray scale, log scale に変換
+      
+            color_np = full_color_current.detach().cpu().numpy()
+            color_np = np.clip(color_np, 0, 1)
+            self.experiment.log({
+                'Color_from_event' : {'Color' : wandb.Image(color_np)}
+            })
+        
+            rendered_gray = self.rgb_to_luma(full_color_current, esim=True)
+            gray_np = (rendered_gray*255).detach().cpu().numpy()
+            self.experiment.log({
+                'Gray' : {'Gray' : wandb.Image(gray_np)}
+            })
+            
+            pre_gt_gray = self.rgb_to_luma(pre_gt_color, esim=True)
+            pre_gt_loggray = self.lin_log(pre_gt_gray*255, linlog_thres=20)
 
             # 2. pre_gt_gray(batch)にevent_accumulateを足す
             gt_pos = torch.unsqueeze(gt_event[:, :, 0] , dim = 2)
             gt_neg = torch.unsqueeze(gt_event[:, :, 1] , dim = 2)
             C_thres = 0.1
             gt_loggray_events = pre_gt_loggray -  gt_pos * C_thres + gt_neg * C_thres
-            gt_inverse_loggray = inverse_lin_log(gt_loggray_events)
+            gt_inverse_loggray = self.inverse_lin_log(gt_loggray_events)
+            #print(gt_inverse_loggray)
 
             # 3. color(→gray)と2を比較してloss関数を定義 
-            loss_event = torch.abs(gt_inverse_loggray - gt_gray)[mask].sum()
+            # loss_event = torch.abs(gt_inverse_loggray - rendered_gray).sum()
+            loss_event = torch.abs(gt_inverse_loggray - rendered_gray*255).sum()
+            # print(loss_event)
 
             balancer = self.cfg['event']['balancer'] # coefficient to balance event loss and rgbd loss
             loss_event = loss_event * balancer
 
             if self.activate_events:
+
+                loss_event.requires_grad = True
                 loss_event.backward()
             
             loss_event_item = loss_event.item()
@@ -254,7 +353,8 @@ class Tracker(object):
         else:
             pbar = tqdm(self.frame_loader)
 
-        for idx, gt_color, gt_depth, gt_event, gt_c2w in pbar:
+        # TODO : change frame_loader() and remove gt_mask
+        for idx, gt_color, gt_depth, gt_event, gt_mask, gt_c2w in pbar:
             if not self.verbose:
                 pbar.set_description(f"Tracking Frame {idx[0]}")
 
@@ -271,7 +371,7 @@ class Tracker(object):
                 if idx > 0 and (idx % self.every_frame == 1 or self.every_frame == 1):
                     while self.mapping_idx[0] != idx-1:
                         time.sleep(0.1)
-                    pre_c2w = self.estimate_c2w_list[idx-1].to(device) # what is usd for??
+                    pre_c2w = self.estimate_c2w_list[idx-1].to(device) # what is used for??
             elif self.sync_method == 'loose':
                 # mapping idx can be later than tracking idx is within the bound of
                 # [-self.every_frame-self.every_frame//2, -self.every_frame+self.every_frame//2]
@@ -351,7 +451,7 @@ class Tracker(object):
                     else:
                         loss_rgbd, loss_event = self.optimize_cam_in_batch(camera_tensor, gt_color, gt_depth, gt_event, self.tracking_pixels, optimizer_camera,
                                                                             pre_gt_color,
-                                                                           rgbd=False, event=True)
+                                                                           rgbd=True, event=True)
                     
                     print("RGBD loss: ", loss_rgbd)
                     print("Event loss : ", loss_event)
@@ -359,18 +459,15 @@ class Tracker(object):
                     
                     loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)-camera_tensor).mean().item()
 
-                    # self.visualizer.vis(
-                    #     idx, cam_iter, gt_depth, gt_color, camera_tensor, self.c, self.decoders)
+                    self.visualizer.vis(
+                      idx, cam_iter, gt_depth, gt_color, camera_tensor, self.c, self.decoders)
 
-                    # loss = self.optimize_cam_in_batch(
-                    #     camera_tensor, gt_color, gt_depth, self.tracking_pixels, optimizer_camera)
 
                     if cam_iter == 0:
                         initial_loss_rgbd = loss_rgbd
                         initial_loss_event = loss_event
                     
                     if self.verbose:
-                        # 最後
                         if cam_iter == self.num_cam_iters-1:
                             if rgbd_available:
                                 print(
@@ -392,22 +489,24 @@ class Tracker(object):
                                 self.experiment.log(dict_log)
                             else:
                                 print(
-                                    f'RGBD loss: None ' +
-                                    f'event loss: {initial_loss_event:.2f}->{loss_event:.2f}' + 
-                                    f'camera tensor error: {initial_loss_camera_tensor:.4f}->{loss_camera_tensor:.4f}')
+                                   f'RGBD loss: None ' +
+                                   f'event loss: {initial_loss_event:.2f}->{loss_event:.2f}' + 
+                                   f'camera tensor error: {initial_loss_camera_tensor:.4f}->{loss_camera_tensor:.4f}')
 
                             
                                 dict_log = {
-                                    'Event loss' : loss_event,
-                                    'Event loss improvement' : initial_loss_event - loss_event,
-                                    'Camera error': loss_camera_tensor,
-                                    'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
-                                    'Frame': idx
+                                   'Event loss' : loss_event,
+                                   'Event loss improvement' : initial_loss_event - loss_event,
+                                   'Camera error': loss_camera_tensor,
+                                   'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
+                                   'Frame': idx
                                 }
 
                                 self.experiment.log(dict_log)
 
+                    # TODO 
                     # use event loss as criteria because it is always available
+                    
                     if loss_event < current_min_loss_event:
                         current_min_loss_event = loss_event
                         candidate_cam_tensor = camera_tensor.clone().detach()
