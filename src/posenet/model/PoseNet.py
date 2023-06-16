@@ -5,28 +5,38 @@
 import torch
 import torch.nn.functional as torch_F
 
-# example configs
-config = {
-        'PoseNet_freq': 5,
-        'layers_feat': [None,256,256,256,256,256,256,256,256],
-        'min_time': 0,
-        'max_time': 100
-        }
+# # example configs
+# config = {
+#         'PoseNet_freq': 5,
+#         'layers_feat': [None,256,256,256,256,256,256,256,256],
+#         'min_time': 0,
+#         'max_time': 100
+#         }
         
 class PoseNet(torch.nn.Module):
 
-    def __init__(self, config):
+    # def __init__(self, config):
+    #     super().__init__()
+    #     self.config = config
+    #     self.input_t_dim = config['PoseNet_freq'] * 2 + 1
+    #     self.define_network(config)
+
+    #     self.min_time = config['min_time']
+    #     self.max_time = config['max_time']
+    
+    def __init__(self, PoseNet_freq=5, layers_feat=[None,256,256,256,256,256,256,256,256],
+                 min_time=0, max_time=100):
         super().__init__()
-        self.config = config
-        self.input_t_dim = config['PoseNet_freq'] * 2 + 1
-        self.define_network(config)
+        self.PoseNet_freq = PoseNet_freq
+        self.input_t_dim = PoseNet_freq*2 + 1
+        self.define_network(layers_feat)
 
-        self.min_time = config['min_time']
-        self.max_time = config['max_time']
+        self.min_time = min_time
+        self.max_time = max_time
 
-
-    def define_network(self, config):
-        layers_list = config['layers_feat']  
+    def define_network(self, layers_feat):
+        #layers_list = config['layers_feat']  
+        layers_list = layers_feat
         L = list(zip(layers_list[:-1],layers_list[1:]))  
 
         # init TransNet
@@ -51,7 +61,7 @@ class PoseNet(torch.nn.Module):
     def forward(self, input_time):
         # normalization to (-1, 1)
         input_time = 2*(input_time - self.min_time)/(self.max_time - self.min_time) - 1
-        encoding_time = self.positional_encoding(input_time, L = self.config['PoseNet_freq'] )
+        encoding_time = self.positional_encoding(input_time, L = self.PoseNet_freq)
         encoding_time = torch.cat([input_time,encoding_time],dim=-1) 
         
         pred_translation = self.forward_transNet(encoding_time)
@@ -63,7 +73,7 @@ class PoseNet(torch.nn.Module):
         translation_feat = encoding_time
         for li, layer in enumerate(self.mlp_transNet):
             if li in self.cfg['tracking']['skip']: 
-                translation_feat = torch.cat([translation_feat,encoding_time],dim=-1)
+                translation_feat = torch.cat([translation_feat, encoding_time],dim=-1)
             translation_feat = layer(translation_feat)
             if li==len(self.mlp_transnet)-1:
                 # last layer
@@ -75,8 +85,8 @@ class PoseNet(torch.nn.Module):
     def forward_quatsNet(self, encoding_time):
         rotation_feat = encoding_time
         for li, layer in enumerate(self.mlp_quatsNet):
-            if li in self.cfg['tracking']['skip']: rotation_feat = 
-            torch.cat([rotation_feat,encoding_time],dim=-1)
+            if li in self.cfg['tracking']['skip']: 
+                rotation_feat = torch.cat([rotation_feat, encoding_time],dim=-1)
             rotation_feat = layer(rotation_feat)
             if li==len(self.mlp_quatsNet)-1:
                 # last layer
@@ -88,8 +98,7 @@ class PoseNet(torch.nn.Module):
     def cal_jacobian(self, input_time):
         input_time = torch.tensor(input_time.clone(), requires_grad=True)
         input_time = 2*(input_time - self.min_time)/(self.max_time - self.min_time) - 1
-        encoding_time = self.positional_encoding(input_time, 
-        L = self.config['PoseNet_freq'] )
+        encoding_time = self.positional_encoding(input_time, L = self.PoseNet_freq)
         encoding_time = torch.cat([input_time,encoding_time],dim=-1) 
 
         translation_jacobian = torch.autograd.functional.jacobian(
