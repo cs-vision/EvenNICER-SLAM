@@ -203,7 +203,7 @@ class Tracker(object):
 
             ret_event = self.renderer.render_batch_ray(
                 self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
-            _, uncertainty, rendered_color = ret_event
+            _, event_uncertainty, rendered_color = ret_event
 
 
             # TODO : shoule be removed 
@@ -270,22 +270,15 @@ class Tracker(object):
       
             color_np = full_color_current.detach().cpu().numpy()
             color_np = np.clip(color_np, 0, 1)
-            # self.experiment.log({
-            #    'Rendered_Color' : {'Rendered_Color' : wandb.Image(color_np)}
-            # })
         
             rendered_gray = self.rgb_to_luma(full_color_current, esim=True)
             rendered_gray_log = self.lin_log(rendered_gray*255, linlog_thres=20)
             rendered_gray_np = (rendered_gray*255).detach().cpu().numpy()
-            # self.experiment.log({
-            #     'Rendered_Gray' : {'Rendered_Gray' : wandb.Image(rendered_gray_np)}
-            # })
-            
+        
             pre_gt_gray = self.rgb_to_luma(pre_gt_color, esim=True)
             pre_gt_loggray = self.lin_log(pre_gt_gray*255, linlog_thres=20)
 
             # 2. add events to pre_gt_gray(batch)
-
             # ↓original
             # gt_pos = torch.unsqueeze(gt_event[:, :, 0] , dim = 2)
             # gt_neg = torch.unsqueeze(gt_event[:, :, 1] , dim = 2)
@@ -343,6 +336,7 @@ class Tracker(object):
             pbar = tqdm(self.frame_loader)
 
         # TODO : change frame_loader() and remove gt_mask
+        # TODO : framewise→asynchronous
         for idx, gt_color, gt_depth, gt_event, gt_mask, gt_c2w in pbar:
             if not self.verbose:
                 pbar.set_description(f"Tracking Frame {idx[0]}")
@@ -360,7 +354,7 @@ class Tracker(object):
                 if idx > 0 and (idx % self.every_frame == 1 or self.every_frame == 1):
                     while self.mapping_idx[0] != idx-1:
                         time.sleep(0.1)
-                    pre_c2w = self.estimate_c2w_list[idx-1].to(device) # what is used for??
+                    pre_c2w = self.estimate_c2w_list[idx-1].to(device) 
             elif self.sync_method == 'loose':
                 # mapping idx can be later than tracking idx is within the bound of
                 # [-self.every_frame-self.every_frame//2, -self.every_frame+self.every_frame//2]
@@ -409,19 +403,22 @@ class Tracker(object):
                     camera_tensor = torch.cat([quad, T], 0)
                     cam_para_list_T = [T]
                     cam_para_list_quad = [quad]
+                    # TODO : incorporate PoseNet 
+                    # NOTE : why learning rate of quad is lower than that of T ? 
                     optimizer_camera = torch.optim.Adam([{'params': cam_para_list_T, 'lr': self.cam_lr},
                                                          {'params': cam_para_list_quad, 'lr': self.cam_lr*0.2}])
                 else:
                     camera_tensor = Variable(
                         camera_tensor.to(device), requires_grad=True)
                     cam_para_list = [camera_tensor]
+                    # TODO : incorporate PoseNet 
                     optimizer_camera = torch.optim.Adam(
                         cam_para_list, lr=self.cam_lr)
 
                 initial_loss_camera_tensor = torch.abs(
                     gt_camera_tensor.to(device)-camera_tensor).mean().item()
                 candidate_cam_tensor = None
-                current_min_loss = 10000000000.
+                # current_min_loss = 10000000000.
                 current_min_loss_event = 10000000000.
 
                 # add up gt_event_integrate asap
