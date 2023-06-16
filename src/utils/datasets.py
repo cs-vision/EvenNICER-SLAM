@@ -155,6 +155,7 @@ class Replica_event(Replica):
         self.event_paths = sorted(
             glob.glob(f'{self.event_folder}/*events*.txt')
         )
+        
 
         # あとで .to(self.device)する
         # self.events = 

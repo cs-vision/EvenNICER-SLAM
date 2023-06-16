@@ -333,10 +333,10 @@ class Mapper(object):
                         color_grid_para.append(val_grad)
 
         if self.nice:
-            if not self.fix_fine:
+            if not self.fix_fine: # NOTE : False by default
                 decoders_para_list += list(
                     self.decoders.fine_decoder.parameters())
-            if not self.fix_color:
+            if not self.fix_color: # NOTE : True by default
                 decoders_para_list += list(
                     self.decoders.color_decoder.parameters())
         else:
@@ -363,7 +363,7 @@ class Mapper(object):
                     gt_camera_tensor_list.append(gt_camera_tensor)
 
         if self.nice:
-            if self.BA:
+            if self.BA: # NOTE : True by default
                 # The corresponding lr will be set according to which stage the optimization is in
                 optimizer = torch.optim.Adam([{'params': decoders_para_list, 'lr': 0},
                                               {'params': coarse_grid_para, 'lr': 0},
@@ -551,6 +551,7 @@ class Mapper(object):
                 idx = self.idx[0].clone()
                 if idx == self.n_img-1:
                     break
+                # NOTE : ??
                 if self.sync_method == 'strict':
                     if idx % self.every_frame == 0 and idx != prev_idx:
                         break

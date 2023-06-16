@@ -78,7 +78,7 @@ class Tracker(object):
         self.visualizer = Visualizer(freq=cfg['tracking']['vis_freq'], inside_freq=cfg['tracking']['vis_inside_freq'],
                                      vis_dir=os.path.join(self.output, 'vis' if 'Demo' in self.output else 'tracking_vis'),
                                      renderer=self.renderer, verbose=self.verbose, 
-                                     experiment = self.experiment, # wabdn
+                                     experiment = self.experiment, # wabdb
                                      device=self.device,
                                      stage = 'tracker')
         self.H, self.W, self.fx, self.fy, self.cx, self.cy = slam.H, slam.W, slam.fx, slam.fy, slam.cx, slam.cy
@@ -142,6 +142,13 @@ class Tracker(object):
             torch.exp(lin_log_rgb)
         )
         return inverse_lin_log_rgb
+    
+    def asynchro_optimize_cam_in_batch(self, camera_tensor, # NOTE : camera_tensor should be time(?) after incorporating PoseNet
+                                       batch_size, optimizer, # NOTE : optimizer should be included here? 
+                                       pre_gt_color):
+        device = self.device
+        H, W, fx, fy, cx, cy = self.H, self.W, self.fx, self.fy, self.cx, self.cy
+        return 
 
     def optimize_cam_in_batch(self, camera_tensor, 
                               gt_color, gt_depth, gt_event,
@@ -403,7 +410,8 @@ class Tracker(object):
                     camera_tensor = torch.cat([quad, T], 0)
                     cam_para_list_T = [T]
                     cam_para_list_quad = [quad]
-                    # TODO : incorporate PoseNet 
+                    # TODO : incorporate PoseNet  like↓
+                    # optimizer = torch.optim.Adam[{'params': PoseNet_para_list, 'lr': 0}, {}]
                     # NOTE : why learning rate of quad is lower than that of T ? 
                     optimizer_camera = torch.optim.Adam([{'params': cam_para_list_T, 'lr': self.cam_lr},
                                                          {'params': cam_para_list_quad, 'lr': self.cam_lr*0.2}])
