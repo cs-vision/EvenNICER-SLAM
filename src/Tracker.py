@@ -343,7 +343,7 @@ class Tracker(object):
             pbar = tqdm(self.frame_loader)
 
         # TODO : change frame_loader() and remove gt_mask
-        # TODO : framewise→asynchronous
+        # TODO : framewise → asynchronous
         for idx, gt_color, gt_depth, gt_event, gt_mask, gt_c2w in pbar:
             if not self.verbose:
                 pbar.set_description(f"Tracking Frame {idx[0]}")
@@ -389,7 +389,6 @@ class Tracker(object):
 
             else:
                 gt_camera_tensor = get_tensor_from_camera(gt_c2w)
-                # ????? 
                 if self.const_speed_assumption and idx-2 >= 0:
                     pre_c2w = pre_c2w.float()
                     delta = pre_c2w@self.estimate_c2w_list[idx-2].to(
@@ -422,7 +421,8 @@ class Tracker(object):
                     # TODO : incorporate PoseNet 
                     optimizer_camera = torch.optim.Adam(
                         cam_para_list, lr=self.cam_lr)
-
+                    
+                # NOTE : When asynchronous, gt_camera_tensor is not accessible
                 initial_loss_camera_tensor = torch.abs(
                     gt_camera_tensor.to(device)-camera_tensor).mean().item()
                 candidate_cam_tensor = None

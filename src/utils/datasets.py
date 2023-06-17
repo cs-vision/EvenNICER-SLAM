@@ -146,15 +146,14 @@ class Replica_event(Replica):
             self.event_folder = cfg['data']['event_folder']
         else:
             self.event_folder = args.event_folder
-        # self.event_paths = sorted(
-        #     glob.glob(f'{self.event_folder}/*frame*.png'))
-        # self.n_event = len(self.event_paths)
-        # # print(self.n_event, self.n_img)
-        # assert self.n_event == self.n_img - 1, f"Number of GT events does not match that of GT images!"
-
         self.event_paths = sorted(
-            glob.glob(f'{self.event_folder}/*events*.txt')
-        )
+            glob.glob(f'{self.event_folder}/*frame*.png'))
+        self.n_event = len(self.event_paths)
+        assert self.n_event == self.n_img - 1, f"Number of GT events does not match that of GT images!"
+
+        # self.event_paths = sorted(
+        #     glob.glob(f'{self.event_folder}/*events*.txt')
+        # )
         
 
         # あとで .to(self.device)する
@@ -164,8 +163,8 @@ class Replica_event(Replica):
     # TODO : self.events should be defined in def __init__()
     # THEN  
     # events = events(frame_reader) 
-    def __events__(self):
-        return self.events
+    # def __events__(self):
+    #     return self.events
 
     def __getitem__(self, index):
         color_path = self.color_paths[index]
