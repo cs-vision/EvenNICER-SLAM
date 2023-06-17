@@ -186,27 +186,9 @@ class Tracker(object):
 
             
             # TODO: gt_depth should be removed from input (unaccessible)
+            # NOTE : pre_gt_depthにすると精度が若干(？)下がる, c2wと対応しているdepthだから？？　特にRGBD-loss
             batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
                 Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, self.device)
-             
-            if self.nice:
-                # should pre-filter those out of bounding box depth value
-                with torch.no_grad():
-                    det_rays_o = batch_rays_o.clone().detach().unsqueeze(-1)  # (N, 3, 1)
-                    det_rays_d = batch_rays_d.clone().detach().unsqueeze(-1)  # (N, 3, 1)
-                    t = (self.bound.unsqueeze(0).to(device)-det_rays_o)/det_rays_d
-                    t, _ = torch.min(torch.max(t, dim=2)[0], dim=1)
-                    inside_mask = t >= batch_gt_depth
-
-                    # NOTE : to see the effect of mask 
-                    num_true = torch.sum(inside_mask).item()
-                    num_false = torch.sum(~inside_mask).item()
-                    print(num_true)
-                    print(num_false)
-                # batch_rays_d = batch_rays_d[inside_mask]
-                # batch_rays_o = batch_rays_o[inside_mask]
-                # batch_pre_gt_color = batch_pre_gt_color[inside_mask]
-                # batch_gt_event = batch_gt_event[inside_mask]
 
             # NOTE : gt_depth == None the accuracy dropped a lot
             ret_event = self.renderer.render_batch_ray(
