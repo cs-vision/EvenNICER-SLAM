@@ -198,7 +198,7 @@ class Tracker(object):
                     t, _ = torch.min(torch.max(t, dim=2)[0], dim=1)
                     inside_mask = t >= batch_gt_depth
 
-                    # NOTE : to see the effect of mask
+                    # NOTE : to see the effect of mask 
                     num_true = torch.sum(inside_mask).item()
                     num_false = torch.sum(~inside_mask).item()
                     print(num_true)
@@ -208,6 +208,7 @@ class Tracker(object):
                 # batch_pre_gt_color = batch_pre_gt_color[inside_mask]
                 # batch_gt_event = batch_gt_event[inside_mask]
 
+            # NOTE : gt_depth == None the accuracy dropped a lot
             ret_event = self.renderer.render_batch_ray(
                 self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
             _, event_uncertainty, rendered_color = ret_event
