@@ -577,7 +577,7 @@ class Mapper(object):
                 loss_rgbd_item = None
 
             # if event:
-                optimizer_event.zero_grad()
+                # optimizer_event.zero_grad()
 
             # render two images and generate event
             # if event:

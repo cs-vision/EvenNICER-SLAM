@@ -154,6 +154,7 @@ class Tracker(object):
                               gt_color, gt_depth, gt_event,
                               batch_size, optimizer,
                               pre_gt_color,
+                              pre_gt_depth,
                               rgbd =False, 
                               event=True):
         """
@@ -185,16 +186,21 @@ class Tracker(object):
             # full_color_current = torch.clamp(full_color_current, 0, 1)
 
             
-            # TODO: gt_depth should be removed from input (unaccessible)
+            # TODO: gt_depth should be removed from input (unaccessible), gt_depth == None the accuracy dropped a lot
             # NOTE : pre_gt_depthにすると精度が若干(？)下がる, c2wと対応しているdepthだから？？　特にRGBD-loss
-            batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
-                Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, self.device)
-
-            # NOTE : gt_depth == None the accuracy dropped a lot
-            ret_event = self.renderer.render_batch_ray(
-                self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
-            _, event_uncertainty, rendered_color = ret_event
-
+            if rgbd : 
+                batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
+                    Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, self.device)
+                ret_event = self.renderer.render_batch_ray(
+                    self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
+                _, event_uncertainty, rendered_color = ret_event
+            
+            else:
+                batch_rays_o, batch_rays_d, batch_pre_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
+                    Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, pre_gt_depth, pre_gt_color, gt_event, self.device) 
+                ret_event = self.renderer.render_batch_ray(
+                    self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_pre_gt_depth)
+                _, event_uncertainty, rendered_color = ret_event
 
             # TODO : shoule be removed 
             # rendered_color → full_current_color
@@ -423,10 +429,12 @@ class Tracker(object):
                     if rgbd_available:
                         loss_rgbd, loss_event = self.optimize_cam_in_batch(camera_tensor, gt_color, gt_depth, gt_event_integrate, self.tracking_pixels, optimizer_camera,
                                                                            pre_gt_color, 
+                                                                           pre_gt_depth,
                                                                            rgbd=True, event=True)
                     else:
                         loss_rgbd, loss_event = self.optimize_cam_in_batch(camera_tensor, gt_color, gt_depth, gt_event_integrate, self.tracking_pixels, optimizer_camera,
                                                                             pre_gt_color,
+                                                                            pre_gt_depth,
                                                                            rgbd=False, event=True)
                     
                     print("RGBD loss: ", loss_rgbd)
@@ -506,6 +514,7 @@ class Tracker(object):
             
             # store previous gt color
             if idx % self.every_frame == 0:
+                pre_gt_depth = gt_depth
                 pre_gt_color = gt_color
                 self.gt_event_integrate = gt_event_integrate.clone() 
                 print("integrated GT events updated!")
