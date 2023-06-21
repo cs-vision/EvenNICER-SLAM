@@ -19,7 +19,6 @@ from src.utils.Visualizer import Visualizer
 # TODO : wandb should be in Visualizer class
 import wandb
 
-# # TODO : e-sim classにしてimportする
 
 class Tracker(object):
     def __init__(self, cfg, args, slam
@@ -88,7 +87,7 @@ class Tracker(object):
         # RGBD available condition
         self.rgbd_every_frame = cfg['event']['rgbd_every_frame']
 
-    # TODO : e-sim classにしてimportする
+    # TODO : import as  e-sim class?
     def rgb_to_luma(self, rgb, esim=True):
         """
         Input:
@@ -201,16 +200,6 @@ class Tracker(object):
                 ret_event = self.renderer.render_batch_ray(
                     self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_pre_gt_depth)
                 _, event_uncertainty, rendered_color = ret_event
-
-            # TODO : shoule be removed 
-            # rendered_color → full_current_color
-            # batch_pre_gt_color　→ pre_gt_color
-            # batch_gt_event → gt_event
-            full_color_current = rendered_color
-            pre_gt_color = batch_pre_gt_color
-            gt_event = batch_gt_event
-
-
         
         if rgbd: 
             batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color = get_samples(
@@ -261,37 +250,23 @@ class Tracker(object):
             loss_rgbd_item = None
         
         if event:
-            # TODO  : define loss event 
-            # 1. pre_gt_color(batch), full_color_current are converted to gray scale and log scale
+            # NOTE : define loss event 
+            # 1. pre_gt_color(batch), rendered_color are converted to gray scale and log scale
       
-            color_np = full_color_current.detach().cpu().numpy()
-            color_np = np.clip(color_np, 0, 1)
-        
-            rendered_gray = self.rgb_to_luma(full_color_current, esim=True)
-            rendered_gray_log = self.lin_log(rendered_gray*255, linlog_thres=20)
-            rendered_gray_np = (rendered_gray*255).detach().cpu().numpy()
-        
-            pre_gt_gray = self.rgb_to_luma(pre_gt_color, esim=True)
+            rendered_gray = self.rgb_to_luma(rendered_color, esim=True)
+
+            pre_gt_gray = self.rgb_to_luma(batch_pre_gt_color, esim=True)
             pre_gt_loggray = self.lin_log(pre_gt_gray*255, linlog_thres=20)
 
             # 2. add events to pre_gt_gray(batch)
-            # ↓original
-            # gt_pos = torch.unsqueeze(gt_event[:, :, 0] , dim = 2)
-            # gt_neg = torch.unsqueeze(gt_event[:, :, 1] , dim = 2)
-            # after sampling. gt_event != (H, W ,2)
-
-            gt_pos = torch.unsqueeze(gt_event[:, 0] , dim = 1)
-            gt_neg = torch.unsqueeze(gt_event[:, 1] , dim = 1)
-
+            gt_pos = torch.unsqueeze(batch_gt_event[:, 0] , dim = 1)
+            gt_neg = torch.unsqueeze(batch_gt_event[:, 1] , dim = 1)
             C_thres = 0.1
             gt_loggray_events = pre_gt_loggray -  gt_pos * C_thres + gt_neg * C_thres
             gt_inverse_loggray = self.inverse_lin_log(gt_loggray_events)
-            gt_inverse_loggray_np = gt_inverse_loggray.cpu().numpy().clip(0, 255)
 
             # 3. define event_loss
             loss_event = torch.abs(gt_inverse_loggray - rendered_gray*255).sum()
-            loss_event_np = np.abs(gt_inverse_loggray_np - rendered_gray_np)
-
             balancer = self.cfg['event']['balancer'] # coefficient to balance event loss and rgbd loss
             loss_event = loss_event * balancer
 
@@ -492,12 +467,6 @@ class Tracker(object):
                     if loss_event < current_min_loss_event:
                         current_min_loss_event = loss_event
                         candidate_cam_tensor = camera_tensor.clone().detach()
-
-                    # TODO : redefine vis_event in visualizer.py
-                    # self.visualizer.vis_event(
-                    #     idx, cam_iter, gt_depth, gt_color, gt_event, gt_event_lores, pred_event, 
-                    #     gts_event_list, preds_event_list, 
-                    #     camera_tensor, self.c, self.decoders)
 
                 bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape(
                     [1, 4])).type(torch.float32).to(self.device)
