@@ -187,6 +187,7 @@ class Tracker(object):
             
             # TODO: gt_depth should be removed from input (unaccessible), gt_depth == None the accuracy dropped a lot
             # NOTE : When gt_depth→pre_gt_depth, the accuracy of RGB-D drops 
+            if rgbd:
                 batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
                     Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, self.device)
                 ret_event = self.renderer.render_batch_ray(
