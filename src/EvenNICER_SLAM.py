@@ -15,7 +15,6 @@ from src.utils.Logger import Logger
 from src.utils.Mesher import Mesher
 from src.utils.Renderer import Renderer
 
-from event_net import UNet_2heads
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -93,13 +92,6 @@ class EvenNICER_SLAM():
         self.shared_decoders = self.shared_decoders.to(
             self.cfg['mapping']['device'])
         self.shared_decoders.share_memory()
-
-        # event-net loading
-        self.event_net = UNet_2heads(n_channels=6, n_classes1=2, n_classes2=2)
-        self.event_net.load_state_dict(torch.load(self.cfg['event']['pretrained_path'], map_location=cfg['mapping']['device']))
-        self.event_net = self.event_net.to(self.cfg['mapping']['device'])
-        self.event_net.share_memory()
-        self.scale_factor = self.cfg['event']['scale_factor']
 
         # initialize wandb
         self.scene_name = cfg['data']['input_folder'].split('/')[-1]

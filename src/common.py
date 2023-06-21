@@ -23,8 +23,8 @@ def sample_pdf(bins, weights, N_samples, det=False, device='cuda:0'):
     """
     # Get pdf
     weights = weights + 1e-5  # prevent nans
-    pdf = weights / torch.sum(weights, -1, keepdim=True)
-    cdf = torch.cumsum(pdf, -1)
+    pdf = weights / torch.sum(weights, -1, keepdim=True) # probability density function
+    cdf = torch.cumsum(pdf, -1) # cumulative distribution function
     # (batch, len(bins))
     cdf = torch.cat([torch.zeros_like(cdf[..., :1]), cdf], -1)
 
@@ -106,7 +106,7 @@ def select_uv(i, j, n, depth, color, device='cuda:0'):
     color = color[indices]  # (n,3)
     return i, j, depth, color
 
-def select_uv_event(i, j, n, depth, color, event1, event2, device='cuda:0'):
+def select_uv_event(i, j, n, depth, color, event, device='cuda:0'):
     """
     Select n uv from dense uv.
 
@@ -119,13 +119,11 @@ def select_uv_event(i, j, n, depth, color, event1, event2, device='cuda:0'):
     j = j[indices]  # (n)
     depth = depth.reshape(-1)
     color = color.reshape(-1, 3)
-    event1 = event1.reshape(-1, 2)
-    event2 = event2.reshape(-1, 2)
+    event = event.reshape(-1, 2)
     depth = depth[indices]  # (n)
     color = color[indices]  # (n,3)
-    event1 = event1[indices]  # (n,2)
-    event2 = event2[indices]  # (n,2)
-    return i, j, depth, color, event1, event2
+    event = event[indices]
+    return i, j, depth, color, event
 
 def get_sample_uv(H0, H1, W0, W1, n, depth, color, device='cuda:0'):
     """
@@ -141,21 +139,20 @@ def get_sample_uv(H0, H1, W0, W1, n, depth, color, device='cuda:0'):
     i, j, depth, color = select_uv(i, j, n, depth, color, device=device)
     return i, j, depth, color
 
-def get_sample_uv_event(H0, H1, W0, W1, n, depth, color, event1, event2, device='cuda:0'):
+def get_sample_uv_event(H0, H1, W0, W1, n, depth, color, event, device='cuda:0'):
     """
     Sample n uv coordinates from an image region H0..H1, W0..W1
 
     """
     depth = depth[H0:H1, W0:W1]
     color = color[H0:H1, W0:W1]
-    event1 = event1[H0:H1, W0:W1]
-    event2 = event2[H0:H1, W0:W1]
+    event = event[H0:H1, W0:W1]
     i, j = torch.meshgrid(torch.linspace(
         W0, W1-1, W1-W0).to(device), torch.linspace(H0, H1-1, H1-H0).to(device))
     i = i.t()  # transpose
     j = j.t()
-    i, j, depth, color, event1, event2 = select_uv_event(i, j, n, depth, color, event1, event2, device=device)
-    return i, j, depth, color, event1, event2
+    i, j, depth, color, event = select_uv_event(i, j, n, depth, color, event, device=device)
+    return i, j, depth, color, event
 
 def get_samples(H0, H1, W0, W1, n, H, W, fx, fy, cx, cy, c2w, depth, color, device):
     """
@@ -175,16 +172,17 @@ def get_uniform_samples(H0, H1, W0, W1, H, W, h_new, w_new, fx, fy, cx, cy, c2w,
     
     return rays_o, rays_d, sample_depth
 
-def get_samples_event(H0, H1, W0, W1, n, H, W, fx, fy, cx, cy, c2w, depth, color, event1, event2, device):
+def get_samples_event(H0, H1, W0, W1, n, H, W, fx, fy, cx, cy, c2w, depth, color, event, device):
     """
     Get n rays from the image region H0..H1, W0..W1.
     c2w is its camera pose and depth/color/event is the corresponding image tensor.
 
     """
-    i, j, sample_depth, sample_color, sample_event1, sample_event2 = get_sample_uv_event(
-        H0, H1, W0, W1, n, depth, color, event1, event2, device=device)
+    i, j, sample_depth, sample_color, sample_event = get_sample_uv_event(
+        H0, H1, W0, W1, n, depth, color, event, device=device)
     rays_o, rays_d = get_rays_from_uv(i, j, c2w, H, W, fx, fy, cx, cy, device)
-    return rays_o, rays_d, sample_depth, sample_color, sample_event1, sample_event2
+    return rays_o, rays_d, sample_depth, sample_color, sample_event
+
 
 def quad2rotation(quad):
     """
