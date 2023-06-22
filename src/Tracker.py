@@ -9,6 +9,9 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+# NOTE : 
+import torch.nn.functional as F
+
 from src.common import (get_camera_from_tensor, get_samples,
                         get_tensor_from_camera, 
                         get_samples_event)
@@ -100,8 +103,6 @@ class Tracker(object):
         see https://gist.github.com/yohhoy/dafa5a47dade85d8b40625261af3776a
         or https://mymusing.co/bt-709-yuv-to-rgb-conversion-color/ for numbers
         """
-
-
         if esim:
             #  https://github.com/uzh-rpg/rpg_esim/blob/4cf0b8952e9f58f674c3098f1b027a4b6db53427/event_camera_simulator/imp/imp_opengl_renderer/src/opengl_renderer.cpp#L319-L321
             #  image format esim: https://github.com/uzh-rpg/rpg_esim/blob/4cf0b8952e9f58f674c3098f1b027a4b6db53427/event_camera_simulator/esim_visualization/src/ros_utils.cpp#L29-L36
@@ -133,7 +134,6 @@ class Tracker(object):
     
     def inverse_lin_log(self, lin_log_rgb, linlog_thres=20):
         lin_slope = np.log(linlog_thres) / linlog_thres
-
         # Perform inverse linear mapping for values below linlog_thres
         inverse_lin_log_rgb = torch.where(
             lin_log_rgb < lin_slope * linlog_thres,
@@ -178,14 +178,34 @@ class Tracker(object):
         Hedge = self.ignore_edge_H
 
 
-        if event:
-            # NOTE: gt_depth should be None (in if event:)
-            # NOTE: render_img takes so much time → sampling
-            # _, _, full_color_current = self.renderer.render_img(self.c, self.decoders, c2w, self.device, stage='color', gt_depth=gt_depth)
-            # full_color_current = torch.clamp(full_color_current, 0, 1)
+        # TODO : rescale 
+        scale = 0.25
+        rescale = False
+        if rescale: # event 
+            H = H // 4
+            W = W // 4
+            Wedge = Wedge // 4
+            Hedge = Hedge // 4
+            print(gt_depth.shape)
+            print(gt_color.shape)
+            print(gt_event.shape)
+            gt_depth = F.interpolate(gt_depth.unsqueeze(0).unsqueeze(0), (H, W)).squeeze()
+            print(gt_depth.shape)
+            gt_color = F.interpolate(gt_color.permute(2, 0, 1).unsqueeze(0), (H, W)).squeeze().permute(1, 2, 0)
+            print(gt_color.shape)
+            pre_gt_color = F.interpolate(pre_gt_color.permute(2, 0, 1).unsqueeze(0), (H, W)).squeeze().permute(1, 2, 0)
+            pre_gt_depth = F.interpolate(pre_gt_depth.unsqueeze(0).unsqueeze(0), (H, W)).squeeze()
 
-            
-            # TODO: gt_depth should be removed from input (unaccessible), gt_depth == None the accuracy dropped a lot
+            gt_event = F.interpolate(gt_event.permute(2, 0, 1).unsqueeze(0), (H, W)).squeeze().permute(1, 2, 0)
+            fx = fx * scale
+            fy = fy * scale
+            cx = cx * scale
+            cy = cy * scale
+
+            # self.tracking_pixels = self.tracking_pixels // 4
+
+        if event:    
+            # TODO : gt_depth should be removed from input (unaccessible), gt_depth == None the accuracy dropped a lot
             # NOTE : When gt_depth→pre_gt_depth, the accuracy of RGB-D drops 
             if rgbd:
                 batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
