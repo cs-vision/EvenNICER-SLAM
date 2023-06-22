@@ -14,7 +14,8 @@ import torch.nn.functional as F
 
 from src.common import (get_camera_from_tensor, get_samples,
                         get_tensor_from_camera, 
-                        get_samples_event)
+                        get_samples_event,
+                        get_rays_from_uv)
 from src.utils.datasets import get_dataset
 from src.utils.Visualizer import Visualizer
 
@@ -142,12 +143,47 @@ class Tracker(object):
         )
         return inverse_lin_log_rgb
     
-    def asynchro_optimize_cam_in_batch(self, camera_tensor, # NOTE : camera_tensor should be time(?) after incorporating PoseNet
-                                       batch_size, optimizer, # NOTE : optimizer should be included here? 
-                                       pre_gt_color):
-        device = self.device
-        H, W, fx, fy, cx, cy = self.H, self.W, self.fx, self.fy, self.cx, self.cy
-        return 
+    def asynchronous_event_sampling_optimize(self, camera_tensor,
+                                             pre_gt_color, gt_depth, gt_event, # NOTE : gt_event → txt
+                                             pixel_numbers):
+        # 1. load events.txt per frame → change class "Replica_event(Replica)" in datasets.py
+        # 2. count the number of events per pixel 
+        # timestamp, x, y, polarity → x, y, +, - , 絶対値
+        # 3. + と - の絶対値が一定値以上なら発火する→ event_lossの計算
+        H = pre_gt_color.size(0) # y 
+        W = pre_gt_color.size(1) # x
+        loss_events = 0
+
+        gt_event_array = gt_event.numpy()
+        events_array = np.zeros(H, W)
+        for event in gt_event_array:
+            i = event[1] # x
+            j = event[2] # y
+            events_array[j, i] += event[3]
+            max_events = np.max(np.abs(events_array))
+            if max_events >= 10 : # TODO 
+                ray_o, ray_d = get_rays_from_uv(i, j, camera_tensor, H, W, self.fx, self.fy, self.cx, self.cy, self.device) # TODO:rescale        
+                ret = self.renderer.render_batch_ray(
+                    self.c, self.decoders, ray_d, ray_o,  self.device, stage='color',  gt_depth=gt_depth[j, i])
+                _, event_uncertainty, rendered_color = ret
+                rendered_gray = self.rgb_to_luma(rendered_color, esim=True)
+
+                pre_color = pre_gt_color[j, i]
+                pre_gray = self.rgb_to_luma(pre_color, esim=True)
+                pre_loggray = self.lin_log(pre_gray*255, linlog_thres=20)
+
+                C_thres = 0.1
+                loggray_add_events = pre_loggray + events_array[j, i]*C_thres
+                inverse_loggray = self.inverse_lin_log(loggray_add_events)
+
+                
+                loss_event = torch.abs(inverse_loggray - rendered_gray*255).sum()
+                balancer = self.cfg['event']['balancer'] # coefficient to balance event loss and rgbd loss
+                loss_event = loss_event * balancer
+                loss_events += loss_event
+
+                events_array[j, i] = -100
+        return loss_events # per frame
 
     def optimize_cam_in_batch(self, camera_tensor, 
                               gt_color, gt_depth, gt_event,
@@ -177,22 +213,17 @@ class Tracker(object):
         Wedge = self.ignore_edge_W
         Hedge = self.ignore_edge_H
 
-
         # TODO : rescale 
+        # NOTE : should I use transform method instead?
         scale = 0.25
-        rescale = False
+        rescale = True
         if rescale: # event 
             H = H // 4
             W = W // 4
             Wedge = Wedge // 4
             Hedge = Hedge // 4
-            print(gt_depth.shape)
-            print(gt_color.shape)
-            print(gt_event.shape)
             gt_depth = F.interpolate(gt_depth.unsqueeze(0).unsqueeze(0), (H, W)).squeeze()
-            print(gt_depth.shape)
             gt_color = F.interpolate(gt_color.permute(2, 0, 1).unsqueeze(0), (H, W)).squeeze().permute(1, 2, 0)
-            print(gt_color.shape)
             pre_gt_color = F.interpolate(pre_gt_color.permute(2, 0, 1).unsqueeze(0), (H, W)).squeeze().permute(1, 2, 0)
             pre_gt_depth = F.interpolate(pre_gt_depth.unsqueeze(0).unsqueeze(0), (H, W)).squeeze()
 
@@ -202,24 +233,24 @@ class Tracker(object):
             cx = cx * scale
             cy = cy * scale
 
-            # self.tracking_pixels = self.tracking_pixels // 4
-
         if event:    
             # TODO : gt_depth should be removed from input (unaccessible), gt_depth == None the accuracy dropped a lot
             # NOTE : When gt_depth→pre_gt_depth, the accuracy of RGB-D drops 
             if rgbd:
-                batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
+                batch_rays_o_event, batch_rays_d_event, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
                     Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, self.device)
                 ret_event = self.renderer.render_batch_ray(
-                    self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
+                    self.c, self.decoders, batch_rays_d_event, batch_rays_o_event,  self.device, stage='color',  gt_depth=batch_gt_depth)
                 _, event_uncertainty, rendered_color = ret_event
             
             else:
-                batch_rays_o, batch_rays_d, batch_pre_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
-                    Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, pre_gt_depth, pre_gt_color, gt_event, self.device) 
+                batch_rays_o_event, batch_rays_d_event, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
+                    Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, self.device) 
                 ret_event = self.renderer.render_batch_ray(
-                    self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_pre_gt_depth)
+                    self.c, self.decoders, batch_rays_d_event, batch_rays_o_event,  self.device, stage='color',  gt_depth=batch_gt_depth)
                 _, event_uncertainty, rendered_color = ret_event
+
+
         
         if rgbd: 
             batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color = get_samples(

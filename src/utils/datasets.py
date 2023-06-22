@@ -617,3 +617,75 @@ dataset_dict = {
     "rpg_event": RPG_event,
     "rpg_event_dense": RPG_event_dense
 }
+
+
+
+# class Replica_event(Replica):
+#     def __init__(self, cfg, args, scale, device='cuda:0'
+#                  ):
+#         super(Replica_event, self).__init__(cfg, args, scale, device)
+#         print("Running on Replica_event dataset!")
+#         if args.event_folder is None:
+#             self.event_folder = cfg['data']['event_folder']
+#         else:
+#             self.event_folder = args.event_folder
+#         self.event_paths = sorted(glob.glob(f'{self.event_folder}/*events*.txt'))
+#         self.n_event = len(self.event_paths)
+#         # print(self.n_event, self.n_img)
+#         assert self.n_event == self.n_img - 1, f"Number of GT events does not match that of GT images!"
+
+#     def __getitem__(self, index):
+#         color_path = self.color_paths[index]
+#         depth_path = self.depth_paths[index]
+#         color_data = cv2.imread(color_path)
+
+#         index_event = index - 1
+#         if index_event >= 0:
+#             event_path = self.event_paths[index_event]
+#         else:
+#             event_path = None
+#         if event_path is not None : 
+#             event_data = np.loadtxt(self.event_paths[index_event])
+#         else:
+#             event_data = np.zeros_like(color_data)
+#         event_data = torch.from_numpy(event_data)
+        
+#         if '.png' in depth_path:
+#             depth_data = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)
+#         elif '.exr' in depth_path:
+#             depth_data = readEXR_onlydepth(depth_path)
+     
+#         if self.distortion is not None:
+#             K = as_intrinsics_matrix([self.fx, self.fy, self.cx, self.cy])
+#             # undistortion is only applied on color image, not depth!
+#             color_data = cv2.undistort(color_data, K, self.distortion)
+#             #event_data = cv2.undistort(event_data, K, self.distortion)
+
+#         color_data = cv2.cvtColor(color_data, cv2.COLOR_BGR2RGB)
+#         color_data = color_data / 255.
+#         depth_data = depth_data.astype(np.float32) / self.png_depth_scale
+
+#         H, W = depth_data.shape
+#         color_data = cv2.resize(color_data, (W, H))
+#         color_data = torch.from_numpy(color_data)
+#         depth_data = torch.from_numpy(depth_data)*self.scale
+
+#         if self.crop_size is not None:
+#             # follow the pre-processing step in lietorch, actually is resize
+#             color_data = color_data.permute(2, 0, 1)
+#             color_data = F.interpolate(
+#                 color_data[None], self.crop_size, mode='bilinear', align_corners=True)[0]
+#             depth_data = F.interpolate(
+#                 depth_data[None, None], self.crop_size, mode='nearest')[0, 0]
+#             color_data = color_data.permute(1, 2, 0).contiguous()
+
+#         edge = self.crop_edge
+#         if edge > 0:
+#             # crop image edge, there are invalid value on the edge of the color image
+#             color_data = color_data[edge:-edge, edge:-edge]
+#             depth_data = depth_data[edge:-edge, edge:-edge]
+
+#         pose = self.poses[index]
+#         pose[:3, 3] *= self.scale
+#         return index, color_data.to(self.device), depth_data.to(self.device), event_data.to(self.device), pose.to(self.device)
+
