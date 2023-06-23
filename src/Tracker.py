@@ -88,7 +88,7 @@ class Tracker(object):
         # RGBD available condition
         self.rgbd_every_frame = cfg['event']['rgbd_every_frame']
 
-    # TODO : e-sim classにしてimportする
+    # TODO : import  as e-sim class
     def rgb_to_luma(self, rgb, esim=True):
         """
         Input:
@@ -184,23 +184,28 @@ class Tracker(object):
             # NOTE: render_img takes so much time → sampling
             # _, _, full_color_current = self.renderer.render_img(self.c, self.decoders, c2w, self.device, stage='color', gt_depth=gt_depth)
             # full_color_current = torch.clamp(full_color_current, 0, 1)
-
+            batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
+                Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, self.device)
             
             # TODO: gt_depth should be removed from input (unaccessible), gt_depth == None the accuracy dropped a lot
             # NOTE : pre_gt_depthにすると精度が若干(？)下がる, c2wと対応しているdepthだから？？　特にRGBD-loss
-            if rgbd : 
-                batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
-                    Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, self.device)
-                ret_event = self.renderer.render_batch_ray(
-                    self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
-                _, event_uncertainty, rendered_color = ret_event
+            # if rgbd : 
+            #     batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
+            #         Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, self.device)
+            #     ret_event = self.renderer.render_batch_ray(
+            #         self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
+            #     _, event_uncertainty, rendered_color = ret_event
             
-            else:
-                batch_rays_o, batch_rays_d, batch_pre_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
-                    Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, pre_gt_depth, pre_gt_color, gt_event, self.device) 
-                ret_event = self.renderer.render_batch_ray(
-                    self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_pre_gt_depth)
-                _, event_uncertainty, rendered_color = ret_event
+            # else:
+            #     batch_rays_o, batch_rays_d, batch_pre_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
+            #         Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, pre_gt_depth, pre_gt_color, gt_event, self.device) 
+            #     ret_event = self.renderer.render_batch_ray(
+            #         self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_pre_gt_depth)
+            #     _, event_uncertainty, rendered_color = ret_event
+
+            ret_event = self.renderer.render_batch_ray(
+                self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
+            _, event_uncertainty, rendered_color = ret_event
 
             # TODO : shoule be removed 
             # rendered_color → full_current_color
@@ -209,8 +214,6 @@ class Tracker(object):
             full_color_current = rendered_color
             pre_gt_color = batch_pre_gt_color
             gt_event = batch_gt_event
-
-
         
         if rgbd: 
             batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color = get_samples(
