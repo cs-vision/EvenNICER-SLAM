@@ -10,7 +10,7 @@ from torch.autograd import Variable
 from src.common import (get_camera_from_tensor, get_samples,
                         get_tensor_from_camera, random_select)
 from src.utils.datasets import get_dataset
-from src.utils.Visualizer import Visualizer
+from src.utils.Visualizer_nice import Visualizer
 
 
 class Mapper(object):

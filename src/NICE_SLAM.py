@@ -7,8 +7,8 @@ import torch.multiprocessing
 import torch.multiprocessing as mp
 
 from src import config
-from src.Mapper import Mapper
-from src.Tracker import Tracker
+from src.Mapper_nice import Mapper
+from src.Tracker_nice_posenet import Tracker
 from src.utils.datasets import get_dataset
 from src.utils.Logger import Logger
 from src.utils.Mesher import Mesher
@@ -16,8 +16,8 @@ from src.utils.Renderer import Renderer
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-# PoseNet 
-from pose_net import transNet,rotsNet,quaternion, pose
+# # PoseNet 
+# from pose_net import transNet,quatsNet
 
 class NICE_SLAM():
     """
@@ -101,11 +101,10 @@ class NICE_SLAM():
 
 
         # NOTE :PoseNet
-        self.transNet = transNet()
-        self.rotsNet = rotsNet()
-        self.quaternion = quaternion()
-        self.pose = pose()
-
+        # AttributeError: 'NICE_SLAM' object has no attribute 'transNet'??
+        # self.transNet = transNet(cfg)
+        # self.quatNet = quatsNet(cfg)
+        
     def print_output_desc(self):
         print(f"INFO: The output folder is {self.output}")
         if 'Demo' in self.output:
@@ -281,6 +280,8 @@ class NICE_SLAM():
         Args:
             rank (int): Thread ID.
         """
+
+
 
         self.mapper.run()
 

@@ -1,1 +1,1 @@
-from .posenet_model import transeNet, rotsNet, quaternion, pose
+from .posenet_model import transNet, quatsNet

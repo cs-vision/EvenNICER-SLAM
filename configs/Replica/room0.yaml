@@ -7,3 +7,4 @@ data:
   output: output/Replica/room0
   # event folder
   event_folder: Datasets/replica_gt_png/room0
+  # event_folder: Datasets/replica_gt_events/room0
