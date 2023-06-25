@@ -77,11 +77,110 @@ class Tracker(object):
         # self.pose = slam.pose
 
     def init_posenet_train(self):
-        self.optim_trans_init = torch.optim.Adam([dict(params=self.transNet.parameters(), lr = self.cam_lr*1)])
+        self.optim_trans_init = torch.optim.Adam([dict(params=self.transNet.parameters(), lr = self.cam_lr*1)]) # TODO ; 10→1
         self.optim_quats_init = torch.optim.Adam([dict(params=self.quatsNet.parameters() , lr = self.cam_lr*0.2)])
+        #self.optim_trans_init.zero_grad()
+        #self.optim_quats_init.zero_grad()
 
-        self.optim_trans_init.zero_grad()
-        self.optim_quats_init.zero_grad()
+    def optimize_trans_in_batch(self, translation, quaternion, gt_color, gt_depth, batch_size, optim_trans_init):
+        device = self.device
+        H, W, fx, fy, cx, cy = self.H, self.W, self.fx, self.fy, self.cx, self.cy
+        optim_trans_init.zero_grad()
+        quaternion = quaternion.clone().detach().to(device)
+        rotation = quad2rotation(quaternion)
+        c2w = torch.concat([rotation,translation[...,None]],dim=-1).squeeze()
+
+        Wedge = self.ignore_edge_W
+        Hedge = self.ignore_edge_H
+        batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color = get_samples(
+            Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, gt_color, self.device)
+        if self.nice:
+            # should pre-filter those out of bounding box depth value
+            with torch.no_grad():
+                det_rays_o = batch_rays_o.clone().detach().unsqueeze(-1)  # (N, 3, 1)
+                det_rays_d = batch_rays_d.clone().detach().unsqueeze(-1)  # (N, 3, 1)
+                t = (self.bound.unsqueeze(0).to(device)-det_rays_o)/det_rays_d
+                t, _ = torch.min(torch.max(t, dim=2)[0], dim=1)
+                inside_mask = t >= batch_gt_depth
+            batch_rays_d = batch_rays_d[inside_mask]
+            batch_rays_o = batch_rays_o[inside_mask]
+            batch_gt_depth = batch_gt_depth[inside_mask]
+            batch_gt_color = batch_gt_color[inside_mask]
+
+        ret = self.renderer.render_batch_ray(
+            self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
+        depth, uncertainty, color = ret
+        uncertainty = uncertainty.detach()
+        if self.handle_dynamic:
+            tmp = torch.abs(batch_gt_depth-depth)/torch.sqrt(uncertainty+1e-10)
+            mask = (tmp < 10*tmp.median()) & (batch_gt_depth > 0)
+        else:
+            mask = batch_gt_depth > 0
+
+        loss = (torch.abs(batch_gt_depth-depth) /
+                torch.sqrt(uncertainty+1e-10))[mask].sum()
+
+        if self.use_color_in_tracking:
+            color_loss = torch.abs(
+                batch_gt_color - color)[mask].sum()
+            loss += self.w_color_loss*color_loss
+
+        loss.backward()   
+
+        optim_trans_init.step()
+        optim_trans_init.zero_grad()
+
+        return loss.item()
+    
+    def optimize_quats_in_batch(self, translation, quaternion, gt_color, gt_depth, batch_size, optim_quats_init):
+        device = self.device
+        H, W, fx, fy, cx, cy = self.H, self.W, self.fx, self.fy, self.cx, self.cy
+        optim_quats_init.zero_grad()
+        translation = translation.clone().detach().to(device)
+        rotation = quad2rotation(quaternion)
+        c2w = torch.concat([rotation,translation[...,None] ],dim=-1).squeeze()
+
+        Wedge = self.ignore_edge_W
+        Hedge = self.ignore_edge_H
+        batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color = get_samples(
+            Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, gt_color, self.device)
+        if self.nice:
+            # should pre-filter those out of bounding box depth value
+            with torch.no_grad():
+                det_rays_o = batch_rays_o.clone().detach().unsqueeze(-1)  # (N, 3, 1)
+                det_rays_d = batch_rays_d.clone().detach().unsqueeze(-1)  # (N, 3, 1)
+                t = (self.bound.unsqueeze(0).to(device)-det_rays_o)/det_rays_d
+                t, _ = torch.min(torch.max(t, dim=2)[0], dim=1)
+                inside_mask = t >= batch_gt_depth
+            batch_rays_d = batch_rays_d[inside_mask]
+            batch_rays_o = batch_rays_o[inside_mask]
+            batch_gt_depth = batch_gt_depth[inside_mask]
+            batch_gt_color = batch_gt_color[inside_mask]
+
+        ret = self.renderer.render_batch_ray(
+            self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
+        depth, uncertainty, color = ret
+        uncertainty = uncertainty.detach()
+        if self.handle_dynamic:
+            tmp = torch.abs(batch_gt_depth-depth)/torch.sqrt(uncertainty+1e-10)
+            mask = (tmp < 10*tmp.median()) & (batch_gt_depth > 0)
+        else:
+            mask = batch_gt_depth > 0
+
+        loss = (torch.abs(batch_gt_depth-depth) /
+                torch.sqrt(uncertainty+1e-10))[mask].sum()
+
+        if self.use_color_in_tracking:
+            color_loss = torch.abs(
+                batch_gt_color - color)[mask].sum()
+            loss += self.w_color_loss*color_loss
+
+        loss.backward()   
+
+        optim_quats_init.step()
+        optim_quats_init.zero_grad()
+
+        return loss.item()
 
     def optimize_cam_in_batch(self, camera_tensor, gt_color, gt_depth, batch_size):
         """
@@ -99,8 +198,11 @@ class Tracker(object):
         """
         device = self.device
         H, W, fx, fy, cx, cy = self.H, self.W, self.fx, self.fy, self.cx, self.cy
-        # optimizer.zero_grad()
-        # self.init_posenet_train()
+        #optim_quats_init.zero_grad()
+        #optim_trans_init.zero_grad()
+        #optimizer.zero_grad()
+        
+
         c2w = get_camera_from_tensor(camera_tensor)
         Wedge = self.ignore_edge_W
         Hedge = self.ignore_edge_H
@@ -138,15 +240,15 @@ class Tracker(object):
                 batch_gt_color - color)[mask].sum()
             loss += self.w_color_loss*color_loss
 
-        loss.backward()
-        # #optimizer.step()
-        # #optimizer.zero_grad()
-        # self.optim_trans_init.step()
-        # self.optim_quats_init.step()
+        #loss.backward(retain_graph=True)
+        
+        # optim_quats_init.step()
+        # optim_trans_init.step()
 
-        # self.optim_trans_init.zero_grad()
-        # self.optim_quats_init.zero_grad()
-        return loss.item()
+        # optim_quats_init.zero_grad()
+        # optim_trans_init.zero_grad()
+        
+        return loss
 
     def update_para_from_mapping(self):
         """
@@ -168,7 +270,7 @@ class Tracker(object):
         # NOTE : pretrain PoseNet
         idx_total = torch.arange(start=0, end=self.n_img).to(device).reshape(self.n_img, -1)
         self.init_posenet_train()
-        for init_i in range(50): # TODO : 5→50 にする
+        for init_i in range(50): # TODO : 0→50 にする
             estimated_new_cam_trans = self.transNet.forward(idx_total)
             estimated_new_cam_quad = self.quatsNet.forward(idx_total)
             loss_trans = torch.abs(estimated_new_cam_trans - torch.tensor([0, 0, 0]).to(self.device)).mean()
@@ -238,17 +340,17 @@ class Tracker(object):
 
                 idx_tensor = torch.tensor(idx).unsqueeze(0).to(device)
                 estimated_correct_cam_trans = self.transNet.forward(idx_tensor).unsqueeze(0)
-                estimated_new_cam_quad = self.quatsNet.forward(idx_tensor)
+                estimated_new_cam_quad = self.quatsNet.forward(idx_tensor).unsqueeze(0)
+                estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad)
                 # estimated_correct_cam_rots = self.quaternion.q_to_R(estimated_new_cam_quad)
-                estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad.unsqueeze(0))
                 estimated_correct_new_cam_c2w = torch.concat([estimated_correct_cam_rots, estimated_correct_cam_trans [...,None] ],dim=-1).squeeze()
     
                 # NOTE : what is pose.compose??
                 #compose_pose = self.pose.compose([estimated_correct_new_cam_c2w, estimated_new_cam_c2w.detach()[:3,:]]).squeeze()
 
                 camera_tensor = get_tensor_from_camera(
-                    estimated_correct_new_cam_c2w.detach()).to(device)
-                
+                    estimated_correct_new_cam_c2w).to(device)
+
                 # if self.seperate_LR:
                 #     camera_tensor = camera_tensor.to(device).detach()
                 #     T = camera_tensor[-3:]
@@ -272,30 +374,29 @@ class Tracker(object):
                     gt_camera_tensor.to(device)- camera_tensor).mean().item()
                 candidate_cam_tensor = None
                 current_min_loss = 10000000000.
+                #self.init_posenet_train()
                 for cam_iter in range(self.num_cam_iters):
                     # if self.seperate_LR:
                     #     camera_tensor = torch.cat([quad, T], 0).to(self.device)
-
                     self.visualizer.vis(
                         idx, cam_iter, gt_depth, gt_color, camera_tensor, self.c, self.decoders)
-
-                    loss = self.optimize_cam_in_batch(
-                        camera_tensor, gt_color, gt_depth, self.tracking_pixels)
                     
-                    # loss.backward()
-                    #optimizer.step()
-                    #optimizer.zero_grad()
-                    self.optim_trans_init.step()
-                    self.optim_quats_init.step()
+                    estimated_correct_cam_trans = self.transNet.forward(idx_tensor).unsqueeze(0)
+                    estimated_new_cam_quad = self.quatsNet.forward(idx_tensor).unsqueeze(0)
+                    estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad)
 
-                    self.optim_trans_init.zero_grad()
-                    self.optim_quats_init.zero_grad()                    
+                    loss = self.optimize_quats_in_batch(estimated_correct_cam_trans, estimated_new_cam_quad, gt_color, gt_depth, self.tracking_pixels, self.optim_quats_init)
+                    loss += self.optimize_trans_in_batch(estimated_correct_cam_trans, estimated_new_cam_quad, gt_color, gt_depth, self.tracking_pixels, self.optim_trans_init)
+            
+                    estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad.clone().detach())
+                    camera_tensor = get_tensor_from_camera(torch.concat([estimated_correct_cam_rots, estimated_correct_cam_trans.clone().detach()[...,None] ],dim=-1).squeeze())
+
 
                     if cam_iter == 0:
                         initial_loss = loss
 
                     loss_camera_tensor = torch.abs(
-                        gt_camera_tensor.to(device)-camera_tensor).mean().item()
+                        gt_camera_tensor.to(device)-camera_tensor.to(device)).mean().item()
 
                     if self.verbose:
                         if cam_iter == self.num_cam_iters-1:
@@ -304,7 +405,7 @@ class Tracker(object):
                                 f'camera tensor error: {initial_loss_camera_tensor:.4f}->{loss_camera_tensor:.4f}')
                     if loss < current_min_loss:
                         current_min_loss = loss
-                        candidate_cam_tensor = camera_tensor.clone().detach()
+                        candidate_cam_tensor = camera_tensor.to(device)
                 bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape(
                     [1, 4])).type(torch.float32).to(self.device)
                 c2w = get_camera_from_tensor(
