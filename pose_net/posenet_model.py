@@ -1,4 +1,4 @@
-# TODO : deifine transNet, rotsNet, quaternion, pose
+# TODO : deifine transNet, quatsNet
 
 import torch
 import torch.nn.functional as torch_F
@@ -72,7 +72,7 @@ class quatsNet(PoseNet):
         self.layers_list = cfg['Pose_Net']['layers_feat']
         L = list(zip(self.layers_list[:-1],self.layers_list[1:]))  
 
-        # init TransNet
+        # init quatsNet
         self.mlp_quatsNet = torch.nn.ModuleList()
         
         for li,(k_in,k_out) in enumerate(L):

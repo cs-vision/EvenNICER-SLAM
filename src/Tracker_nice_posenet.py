@@ -132,10 +132,11 @@ class Tracker(object):
 
         return loss.item()
     
-    def optimize_quats_in_batch(self, translation, quaternion, gt_color, gt_depth, batch_size, optim_quats_init):
+    def optimize_quats_in_batch(self, translation, quaternion, gt_color, gt_depth, batch_size, optim_quats_init, optim_trans_init):
         device = self.device
         H, W, fx, fy, cx, cy = self.H, self.W, self.fx, self.fy, self.cx, self.cy
         optim_quats_init.zero_grad()
+        optim_trans_init.zero_grad()
         translation = translation.clone().detach().to(device)
         rotation = quad2rotation(quaternion)
         c2w = torch.concat([rotation,translation[...,None] ],dim=-1).squeeze()
@@ -178,7 +179,9 @@ class Tracker(object):
         loss.backward()   
 
         optim_quats_init.step()
+        optim_trans_init.step()
         optim_quats_init.zero_grad()
+        optim_trans_init.zero_grad()
 
         return loss.item()
 
@@ -383,11 +386,10 @@ class Tracker(object):
                     
                     estimated_correct_cam_trans = self.transNet.forward(idx_tensor).unsqueeze(0)
                     estimated_new_cam_quad = self.quatsNet.forward(idx_tensor).unsqueeze(0)
-                    estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad)
 
-                    loss = self.optimize_quats_in_batch(estimated_correct_cam_trans, estimated_new_cam_quad, gt_color, gt_depth, self.tracking_pixels, self.optim_quats_init)
-                    loss += self.optimize_trans_in_batch(estimated_correct_cam_trans, estimated_new_cam_quad, gt_color, gt_depth, self.tracking_pixels, self.optim_trans_init)
-            
+                    loss = self.optimize_quats_in_batch(estimated_correct_cam_trans, estimated_new_cam_quad, gt_color, gt_depth, self.tracking_pixels, self.optim_quats_init, self.optim_trans_init)
+                    #loss += self.optimize_trans_in_batch(estimated_correct_cam_trans, estimated_new_cam_quad, gt_color, gt_depth, self.tracking_pixels, self.optim_trans_init)
+
                     estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad.clone().detach())
                     camera_tensor = get_tensor_from_camera(torch.concat([estimated_correct_cam_rots, estimated_correct_cam_trans.clone().detach()[...,None] ],dim=-1).squeeze())
 
