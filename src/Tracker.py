@@ -148,7 +148,7 @@ class Tracker(object):
                                              pixel_numbers):
         # 1. load events.txt per frame → change class "Replica_event(Replica)" in datasets.py
         # 2. count the number of events per pixel 
-        # timestamp, x, y, polarity → x, y, +, - , 絶対値
+        # x, y, timestamps, polarity → x, y, +, - , 絶対値
         # 3. + と - の絶対値が一定値以上なら発火する→ event_lossの計算
         H = pre_gt_color.size(0) # y 
         W = pre_gt_color.size(1) # x
@@ -303,9 +303,7 @@ class Tracker(object):
         if event:
             # NOTE : define loss event 
             # 1. pre_gt_color(batch), rendered_color are converted to gray scale and log scale
-      
             rendered_gray = self.rgb_to_luma(rendered_color, esim=True)
-
             pre_gt_gray = self.rgb_to_luma(batch_pre_gt_color, esim=True)
             pre_gt_loggray = self.lin_log(pre_gt_gray*255, linlog_thres=20)
 
