@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-
+from pytorch3d.transforms import matrix_to_quaternion
 
 def as_intrinsics_matrix(intrinsics):
     """
@@ -250,6 +250,14 @@ def get_tensor_from_camera(RT, Tquad=False):
         tensor = tensor.to(gpu_id)
     return tensor
 
+def get_tensor_from_camera_in_pytorch(RT, Tquad=False):
+    R, T = RT[:3, :3], RT[:3, 3]
+    quaternion = matrix_to_quaternion(R)
+    if Tquad:
+        tensor = torch.cat((T, quaternion), 0)
+    else:
+        tensor = torch.cat((quaternion, T), 0)
+    return tensor
 
 def raw2outputs_nerf_color(raw, z_vals, rays_d, occupancy=False, device='cuda:0'):
     """
