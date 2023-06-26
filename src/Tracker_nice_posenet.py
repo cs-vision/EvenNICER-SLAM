@@ -132,14 +132,15 @@ class Tracker(object):
 
         return loss.item()
     
-    def optimize_quats_in_batch(self, translation, quaternion, gt_color, gt_depth, batch_size, optim_quats_init, optim_trans_init):
+    def optimize_quats_in_batch(self, c2w, gt_color, gt_depth, batch_size, optim_quats_init, optim_trans_init):
         device = self.device
         H, W, fx, fy, cx, cy = self.H, self.W, self.fx, self.fy, self.cx, self.cy
         optim_quats_init.zero_grad()
         optim_trans_init.zero_grad()
-        translation = translation.clone().detach().to(device)
-        rotation = quad2rotation(quaternion)
-        c2w = torch.concat([rotation,translation[...,None] ],dim=-1).squeeze()
+        #translation = translation.clone().detach().to(device)
+        #rotation = quad2rotation(quaternion)
+        #c2w = torch.concat([rotation,translation[...,None] ],dim=-1).squeeze()
+        #c2w = estimated_correct_new_cam_c2w
 
         Wedge = self.ignore_edge_W
         Hedge = self.ignore_edge_H
@@ -345,14 +346,13 @@ class Tracker(object):
                 estimated_correct_cam_trans = self.transNet.forward(idx_tensor).unsqueeze(0)
                 estimated_new_cam_quad = self.quatsNet.forward(idx_tensor).unsqueeze(0)
                 estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad)
-                # estimated_correct_cam_rots = self.quaternion.q_to_R(estimated_new_cam_quad)
                 estimated_correct_new_cam_c2w = torch.concat([estimated_correct_cam_rots, estimated_correct_cam_trans [...,None] ],dim=-1).squeeze()
-    
-                # NOTE : what is pose.compose??
-                #compose_pose = self.pose.compose([estimated_correct_new_cam_c2w, estimated_new_cam_c2w.detach()[:3,:]]).squeeze()
+                bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape([1, 4])).type(torch.float32).to(device)
+                estimated_correct_new_cam_c2w_homogeneous = torch.cat([estimated_correct_new_cam_c2w, bottom], dim=0)
+                compose_pose = torch.matmul(estimated_correct_new_cam_c2w_homogeneous, estimated_new_cam_c2w.detach()[:3,:].t()).t()
 
                 camera_tensor = get_tensor_from_camera(
-                    estimated_correct_new_cam_c2w).to(device)
+                    compose_pose.detach()).to(device)
 
                 # if self.seperate_LR:
                 #     camera_tensor = camera_tensor.to(device).detach()
@@ -384,16 +384,28 @@ class Tracker(object):
                     self.visualizer.vis(
                         idx, cam_iter, gt_depth, gt_color, camera_tensor, self.c, self.decoders)
                     
+                    loss = self.optimize_quats_in_batch(compose_pose, gt_color, gt_depth, self.tracking_pixels, self.optim_quats_init, self.optim_trans_init)
+                    print(loss)
                     estimated_correct_cam_trans = self.transNet.forward(idx_tensor).unsqueeze(0)
                     estimated_new_cam_quad = self.quatsNet.forward(idx_tensor).unsqueeze(0)
+                    estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad)
+                    estimated_correct_new_cam_c2w = torch.concat([estimated_correct_cam_rots, estimated_correct_cam_trans [...,None] ],dim=-1).squeeze()
+                    #print(estimated_correct_new_cam_c2w.grad_fn)
+                    bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape([1, 4])).type(torch.float32).to(device)
+                    estimated_correct_new_cam_c2w_homogeneous= torch.cat([estimated_correct_new_cam_c2w, bottom], dim=0)
+                    #print(estimated_correct_new_cam_c2w_homogeneous.grad_fn)
+                    #print(estimated_correct_new_cam_c2w)
+                    compose_pose = torch.matmul(estimated_correct_new_cam_c2w_homogeneous, estimated_new_cam_c2w.detach()[:3,:].t()).t()
+                    #print(compose_pose.grad_fn)
+                    #loss = self.optimize_quats_in_batch(estimated_correct_new_cam_c2w, gt_color, gt_depth, self.tracking_pixels, self.optim_quats_init, self.optim_trans_init)
 
-                    loss = self.optimize_quats_in_batch(estimated_correct_cam_trans, estimated_new_cam_quad, gt_color, gt_depth, self.tracking_pixels, self.optim_quats_init, self.optim_trans_init)
-                    #loss += self.optimize_trans_in_batch(estimated_correct_cam_trans, estimated_new_cam_quad, gt_color, gt_depth, self.tracking_pixels, self.optim_trans_init)
-
-                    estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad.clone().detach())
+                    
+                    #estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad.clone().detach())
                     camera_tensor = get_tensor_from_camera(torch.concat([estimated_correct_cam_rots, estimated_correct_cam_trans.clone().detach()[...,None] ],dim=-1).squeeze())
+                    #camera_tensor = get_tensor_from_camera(estimated_correct_new_cam_c2w.clone().detach()).to(device)
 
-
+                    #loss = self.optimize_quats_in_batch(estimated_correct_new_cam_c2w, gt_color, gt_depth, self.tracking_pixels, self.optim_quats_init, self.optim_trans_init)
+                    #loss += self.optimize_trans_in_batch(estimated_correct_cam_trans, estimated_new_cam_quad, gt_color, gt_depth, self.tracking_pixels, self.optim_trans_init)
                     if cam_iter == 0:
                         initial_loss = loss
 
