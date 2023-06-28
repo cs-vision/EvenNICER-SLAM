@@ -1,7 +1,7 @@
 # asynchronous EvenNicer-SLAM
-#dataset: 'replica_event_txt'
+dataset: 'replica_event_txt'
 # frame-wise EvenNicer-SLAM
-dataset: 'replica_event'
+#dataset: 'replica_event'
 # NICE-SLAM
 #dataset: 'replica'
 event:
