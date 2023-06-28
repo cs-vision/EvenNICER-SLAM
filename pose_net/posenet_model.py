@@ -26,44 +26,6 @@ class PoseNet(torch.nn.Module):
         return input_enc
     
 
-class transNet(PoseNet):
-    def __init__(self, cfg):
-        super().__init__(cfg)
-
-    def define_network(self, cfg):
-        self.layers_list = cfg['Pose_Net']['layers_feat']
-        L = list(zip(self.layers_list[:-1],self.layers_list[1:]))  
-
-        # init TransNet
-        self.mlp_transNet = torch.nn.ModuleList()
-        
-        for li,(k_in,k_out) in enumerate(L):
-            if li==0: 
-                k_in = self.input_t_dim
-            #if li in cfg['tracking']['skip'] : k_in += self.input_t_dim
-            if li==len(L)-1:
-                k_out = 3
-            linear = torch.nn.Linear(k_in,k_out)
-            self.mlp_transNet.append(linear)
-    
-    def forward(self, input_time):
-        device = f'cuda:{input_time.get_device()}'
-        # normalization to (-1, 1)
-        input_time = 2*(input_time - self.min_time)/(self.max_time - self.min_time) - 1
-        encoding_time = self.positional_encoding(input_time, L = self.posenet_freq)
-        encoding_time = torch.cat([input_time, encoding_time], dim = -1)
-
-        translation_feat = encoding_time
-        mlp_transNet = self.mlp_transNet.to(device)
-        for li, layer in enumerate(mlp_transNet):
-            translation_feat = layer(translation_feat)
-            if li != len(self.mlp_transNet) - 1:
-                translation_feat = torch_F.leaky_relu(translation_feat)
-            # last layer
-            else:
-                pred_translation = translation_feat
-        return pred_translation
-
 class quatsNet(PoseNet):
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -102,3 +64,40 @@ class quatsNet(PoseNet):
                 pred_quaternion = quaternion_feat
         return pred_quaternion
 
+class transNet(PoseNet):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+
+    def define_network(self, cfg):
+        self.layers_list = cfg['Pose_Net']['layers_feat']
+        L = list(zip(self.layers_list[:-1],self.layers_list[1:]))  
+
+        # init transNet
+        self.mlp_transNet = torch.nn.ModuleList()
+        
+        for li,(k_in,k_out) in enumerate(L):
+            if li==0: 
+                k_in = self.input_t_dim
+            #if li in cfg['tracking']['skip'] : k_in += self.input_t_dim
+            if li==len(L)-1:
+                k_out = 3
+            linear = torch.nn.Linear(k_in,k_out)
+            self.mlp_transNet.append(linear)
+    
+    def forward(self, input_time):
+        device = f'cuda:{input_time.get_device()}'
+        # normalization to (-1, 1)
+        input_time = 2*(input_time - self.min_time)/(self.max_time - self.min_time) - 1
+        encoding_time = self.positional_encoding(input_time, L = self.posenet_freq)
+        encoding_time = torch.cat([input_time, encoding_time], dim = -1)
+
+        translation_feat = encoding_time
+        mlp_transNet = self.mlp_transNet.to(device)
+        for li, layer in enumerate(mlp_transNet):
+            translation_feat = layer(translation_feat)
+            if li != len(self.mlp_transNet) - 1:
+                translation_feat = torch_F.leaky_relu(translation_feat)
+            # last layer
+            else:
+                pred_translation = translation_feat
+        return pred_translation
