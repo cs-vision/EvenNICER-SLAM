@@ -216,7 +216,7 @@ class Tracker(object):
         # TODO : rescale 
         # NOTE : should I use transform method instead?
         scale = 0.25
-        rescale = True
+        rescale = False
         if rescale: # event 
             H = H // 4
             W = W // 4

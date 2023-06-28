@@ -1,6 +1,9 @@
+# asynchronous EvenNicer-SLAM
 #dataset: 'replica_event_txt'
-# dataset: 'replica_event'
-dataset: 'replica'
+# frame-wise EvenNicer-SLAM
+dataset: 'replica_event'
+# NICE-SLAM
+#dataset: 'replica'
 event:
   pretrained_path: 'pretrained/eventnet_2head_replica_1epoch.pth'
   rgbd_every_frame: 5 # RGBD frame gap
@@ -21,7 +24,8 @@ tracking:
   ignore_edge_H: 100
   seperate_LR: False
   # PoseNet : shoule be false
-  const_speed_assumption: False
+  # EvenNicerSLAM(frame-wise): shoule be True
+  const_speed_assumption: True
   lr: 0.001
   pixels: 200
   iters: 10

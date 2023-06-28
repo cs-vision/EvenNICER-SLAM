@@ -39,8 +39,8 @@ def main():
     cfg = config.load_config(
         args.config, 'configs/nice_slam.yaml' if args.nice else 'configs/imap.yaml')
 
-    #slam = EvenNICER_SLAM(cfg, args)
-    slam = NICE_SLAM(cfg, args)
+    slam = EvenNICER_SLAM(cfg, args)
+    #slam = NICE_SLAM(cfg, args)
 
     slam.run()
 
