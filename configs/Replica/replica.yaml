@@ -20,7 +20,8 @@ tracking:
   ignore_edge_W: 100
   ignore_edge_H: 100
   seperate_LR: False
-  const_speed_assumption: True
+  # PoseNet : shoule be false
+  const_speed_assumption: False
   lr: 0.001
   pixels: 200
   iters: 10

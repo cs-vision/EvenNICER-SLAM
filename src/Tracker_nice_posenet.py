@@ -146,74 +146,6 @@ class Tracker(object):
 
         return loss.item()
 
-    def optimize_cam_in_batch(self, camera_tensor, gt_color, gt_depth, batch_size):
-        """
-        Do one iteration of camera iteration. Sample pixels, render depth/color, calculate loss and backpropagation.
-
-        Args:
-            camera_tensor (tensor): camera tensor.
-            gt_color (tensor): ground truth color image of the current frame.
-            gt_depth (tensor): ground truth depth image of the current frame.
-            batch_size (int): batch size, number of sampling rays.
-            optimizer (torch.optim): camera optimizer.
-
-        Returns:
-            loss (float): The value of loss.
-        """
-        device = self.device
-        H, W, fx, fy, cx, cy = self.H, self.W, self.fx, self.fy, self.cx, self.cy
-        #optim_quats_init.zero_grad()
-        #optim_trans_init.zero_grad()
-        #optimizer.zero_grad()
-        
-
-        c2w = get_camera_from_tensor(camera_tensor)
-        Wedge = self.ignore_edge_W
-        Hedge = self.ignore_edge_H
-        batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color = get_samples(
-            Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, gt_color, self.device)
-        if self.nice:
-            # should pre-filter those out of bounding box depth value
-            with torch.no_grad():
-                det_rays_o = batch_rays_o.clone().detach().unsqueeze(-1)  # (N, 3, 1)
-                det_rays_d = batch_rays_d.clone().detach().unsqueeze(-1)  # (N, 3, 1)
-                t = (self.bound.unsqueeze(0).to(device)-det_rays_o)/det_rays_d
-                t, _ = torch.min(torch.max(t, dim=2)[0], dim=1)
-                inside_mask = t >= batch_gt_depth
-            batch_rays_d = batch_rays_d[inside_mask]
-            batch_rays_o = batch_rays_o[inside_mask]
-            batch_gt_depth = batch_gt_depth[inside_mask]
-            batch_gt_color = batch_gt_color[inside_mask]
-
-        ret = self.renderer.render_batch_ray(
-            self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
-        depth, uncertainty, color = ret
-
-        uncertainty = uncertainty.detach()
-        if self.handle_dynamic:
-            tmp = torch.abs(batch_gt_depth-depth)/torch.sqrt(uncertainty+1e-10)
-            mask = (tmp < 10*tmp.median()) & (batch_gt_depth > 0)
-        else:
-            mask = batch_gt_depth > 0
-
-        loss = (torch.abs(batch_gt_depth-depth) /
-                torch.sqrt(uncertainty+1e-10))[mask].sum()
-
-        if self.use_color_in_tracking:
-            color_loss = torch.abs(
-                batch_gt_color - color)[mask].sum()
-            loss += self.w_color_loss*color_loss
-
-        #loss.backward(retain_graph=True)
-        
-        # optim_quats_init.step()
-        # optim_trans_init.step()
-
-        # optim_quats_init.zero_grad()
-        # optim_trans_init.zero_grad()
-        
-        return loss
-
     def update_para_from_mapping(self):
         """
         Update the parameters of scene representation from the mapping thread.
@@ -350,7 +282,7 @@ class Tracker(object):
                     estimated_correct_new_cam_c2w_homogeneous= torch.cat([estimated_correct_new_cam_c2w, bottom], dim=0)
                     compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
                     camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
-                    loss = self.optimize_quats_in_batch(camera_tensor, gt_color, gt_depth, self.tracking_pixels, self.optim_quats_init, self.optim_trans_init)
+                    loss = self.optimize_cam_in_batch(camera_tensor, gt_color, gt_depth, self.tracking_pixels, self.optim_quats_init, self.optim_trans_init)
                     print(loss)
                     print(camera_tensor)
                     if cam_iter == 0:
