@@ -89,8 +89,6 @@ class Tracker(object):
                                      stage = 'tracker')
         self.H, self.W, self.fx, self.fy, self.cx, self.cy = slam.H, slam.W, slam.fx, slam.fy, slam.cx, slam.cy
 
-        self.activate_events = cfg['event']['activate_events']
-
         # RGBD available condition
         self.rgbd_every_frame = cfg['event']['rgbd_every_frame']
 
@@ -444,8 +442,8 @@ class Tracker(object):
                     # if self.seperate_LR:
                     #     camera_tensor = torch.cat([quad, T], 0).to(self.device)
 
-                    #rgbd_available = (idx % self.rgbd_every_frame == 0) # align with when mapping is dispatched
-                    rgbd_available = True
+                    rgbd_available = (idx % self.rgbd_every_frame == 0) # align with when mapping is dispatched
+                    #rgbd_available = True
                     estimated_correct_cam_trans = self.transNet.forward(idx_tensor).unsqueeze(0)
                     estimated_new_cam_quad = self.quatsNet.forward(idx_tensor).unsqueeze(0)
                     estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad)
@@ -454,9 +452,6 @@ class Tracker(object):
                     estimated_correct_new_cam_c2w_homogeneous= torch.cat([estimated_correct_new_cam_c2w, bottom], dim=0)
                     compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
                     camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
-                    #loss = self.optimize_cam_in_batch(camera_tensor, gt_color, gt_depth, self.tracking_pixels, self.optim_quats_init, self.optim_trans_init)
-                    #print(loss)
-                    #print(camera_tensor)
 
                     loss_event = self.optimize_cam_event(camera_tensor, gt_color, gt_depth, gt_event_integrate, self.tracking_pixels, 
                                                          self.optim_quats_init, self.optim_trans_init,
@@ -530,6 +525,7 @@ class Tracker(object):
                                 self.experiment.log(dict_log)
 
                     # use event loss as criteria because it is always available
+                    # NOTE : rgbd_availableのときは，loss_rgbd使った方がいいかも？？
                     if loss_event < current_min_loss_event:
                         current_min_loss_event = loss_event
                         candidate_cam_tensor = camera_tensor.clone().detach()
