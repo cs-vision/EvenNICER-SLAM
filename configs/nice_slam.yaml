@@ -115,3 +115,9 @@ model:
   coarse_bound_enlarge: 2
   pos_embedding_method: fourier
 wandb_dir: "./output"
+
+Pose_Net:
+  freq : 5
+  min_time : 0
+  max_time : 1999
+  layers_feat : [None,256,256,256,256,256,256,256,256]
