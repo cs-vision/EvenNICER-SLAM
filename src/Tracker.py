@@ -169,9 +169,10 @@ class Tracker(object):
 
         gt_depth = F.interpolate(gt_depth.unsqueeze(0).unsqueeze(0), (H,W)).squeeze()
         pre_gt_color = F.interpolate(pre_gt_color.permute(2, 0, 1).unsqueeze(0), (H, W)).squeeze().permute(1, 2, 0)
+        pre_gt_gray = self.rgb_to_luma(pre_gt_color, esim=True)
         gt_event_array = gt_event.cpu().numpy()
 
-        events_array = np.zeros((self.H, self.W))
+        events_array = np.zeros((self.H, self.W, 2))
         # NOTE : how many pixels which achive 10 events
         count = 0
         loss_event = torch.tensor(0.0).unsqueeze(0).unsqueeze(0).to(device)
@@ -179,11 +180,10 @@ class Tracker(object):
         for event in gt_event_array:
             i = int(event[0])
             j = int(event[1])
-            events_array[j][i] += event[3]
-            max_events = np.max(np.abs(events_array))
-            if max_events == 10 :
-                pre_gt_color_pixel = pre_gt_color[j, i]
-                events_array[j][i] = 0
+            events_array[j][i][1] += event[3]
+            #max_events = np.max(np.abs(events_array))
+            if events_array[j][i][1] == 10 and pre_gt_gray[j, i] > 0.5 and events_array[j][i][0] == 0 :
+                #pre_gt_color_pixel = pre_gt_color[j, i]
                 # TODO : camera_tensor should be time(not constant)
                 i_tensor= torch.tensor(i).to(device)
                 j_tensor = torch.tensor(j).to(device)
@@ -192,13 +192,20 @@ class Tracker(object):
                 ret = self.renderer.render_batch_ray(self.c, self.decoders, ray_d, ray_o,  device, stage='color',  gt_depth=gt_depth[j, i])
                 _, _, rendered_color = ret
                 rendered_gray = self.rgb_to_luma(rendered_color, esim=True)
-                pre_gt_gray_pixel = self.rgb_to_luma(pre_gt_color_pixel, esim=True)
+                print(f"rendered_gray:{rendered_gray}\n")
+                pre_gt_gray_pixel = pre_gt_gray[j, i]
                 pre_loggray_pixel = self.lin_log(pre_gt_gray_pixel*255, linlog_thres=20)
+                print(f"pre_loggray_pixel:{pre_loggray_pixel}\n")
 
                 C_thres = 0.1
-                loggray_add_events = pre_loggray_pixel + events_array[j][i]*C_thres
+                loggray_add_events = pre_loggray_pixel + events_array[j][i][1]*C_thres
+                print(f"loggray_add_events:{loggray_add_events}\n")
                 inverse_loggray_pixel = self.inverse_lin_log(loggray_add_events)
+                print(f"inverse_loggray_pixel:{inverse_loggray_pixel}\n")
+
                 loss_event += torch.abs(inverse_loggray_pixel - rendered_gray*255).sum()
+                events_array[j][i][0] = 1
+                events_array[j][i][1] = 0
                 count += 1
 
             if count == 100:
@@ -450,15 +457,15 @@ class Tracker(object):
                 candidate_cam_tensor = camera_tensor.clone().detach()
                 current_min_loss = 10000000000.
 
-                # candidate_cam_tensor  = self.asynchronous_event_sampling_optimize(idx_tensor, camera_tensor,  
-                #                                                             pre_gt_color, gt_depth, gt_event,
-                #                                                             self.optim_quats_init, self.optim_trans_init,
-                #                                                             estimated_new_cam_c2w)
+                candidate_cam_tensor  = self.asynchronous_event_sampling_optimize(idx_tensor, camera_tensor,  
+                                                                            pre_gt_color, gt_depth, gt_event,
+                                                                            self.optim_quats_init, self.optim_trans_init,
+                                                                            estimated_new_cam_c2w)
                 
                 # loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)- candidate_cam_tensor).mean().item()
                 
-                rgbd_available = (idx % self.rgbd_every_frame == 0)
-                #rgbd_available = True
+                #rgbd_available = (idx % self.rgbd_every_frame == 0)
+                rgbd_available = False
                 if rgbd_available:
                     for cam_iter in range(self.num_cam_iters):
                         self.visualizer.vis(
@@ -513,16 +520,15 @@ class Tracker(object):
                             candidate_cam_tensor = camera_tensor.clone().detach()
 
                 bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape(
-                        [1, 4])).type(torch.float32).to(self.device)
+                    [1, 4])).type(torch.float32).to(self.device)
                 print("candidate_cam_tensor:", candidate_cam_tensor)
                 c2w = get_camera_from_tensor(
-                        candidate_cam_tensor.clone().detach())
+                    candidate_cam_tensor.clone().detach())
                 c2w = torch.cat([c2w, bottom], dim=0)
             self.estimate_c2w_list[idx] = c2w.clone().cpu()
             self.gt_c2w_list[idx] = gt_c2w.clone().cpu()
             pre_c2w = c2w.clone()
             self.idx[0] = idx
-
             if self.low_gpu_mem:
                 torch.cuda.empty_cache()
             
