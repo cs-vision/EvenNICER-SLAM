@@ -164,7 +164,8 @@ class Tracker(object):
         gt_depth = F.interpolate(gt_depth.unsqueeze(0).unsqueeze(0), (H,W)).squeeze()
         pre_gt_color = F.interpolate(pre_gt_color.permute(2, 0, 1).unsqueeze(0), (H, W)).squeeze().permute(1, 2, 0)
         pre_gt_gray = self.rgb_to_luma(pre_gt_color, esim=True)
-        gt_gray = self.rgb_to_luma()
+        # NOTE : to compare
+        gt_gray = self.rgb_to_luma(gt_color, esim=True)
         gt_event_array = gt_event.cpu().numpy()
 
         events_array = np.zeros((self.H, self.W, 2))
@@ -203,8 +204,6 @@ class Tracker(object):
                 pre_gt_gray_pixel = pre_gt_gray[j, i]
                 pre_loggray_pixel = self.lin_log(pre_gt_gray_pixel*255, linlog_thres=20)
                 #print(f"pre_loggray_pixel:{pre_loggray_pixel}\n")
-
-                # NOTE : gt_grayと比較してみる
                 
 
                 C_thres = 0.1
@@ -212,7 +211,20 @@ class Tracker(object):
                 #print(f"loggray_add_events:{loggray_add_events}\n") # 0ばっかり
                 inverse_loggray_pixel = torch.clamp(self.inverse_lin_log(loggray_add_events), 0, 255)
                 #print(f"inverse_loggray_pixel:{inverse_loggray_pixel}\n") #60~150あたり
+
+                # NOTE : gt_grayと比較してみる
+                gt_gray_pixel = gt_gray[j, i]
+                #print(f"gt_gray_pixel :{gt_gray_pixel}\n")
+                accuracy = torch.abs(inverse_loggray_pixel - gt_gray_pixel*255)
+                #print(f"acccuracy :{accuracy}\n")
+                if accuracy < 30 :
+                    print(f"gt_gray_pixel :{gt_gray_pixel}\n")
+                    print(f"pre_gt_gray_pixel: {pre_gt_gray_pixel}\n")
+                    print(f"rendered_gray:{rendered_gray}\n")
+
                 loss_event += torch.abs(inverse_loggray_pixel - rendered_gray*255).sum()
+                #if accuracy < 30 :
+                    #print(f"rendering_loss : {torch.abs(inverse_loggray_pixel - rendered_gray*255).sum()}\n")
                 events_array[j][i][0] = 1
                 events_array[j][i][1] = 0
                 count += 1
@@ -441,10 +453,10 @@ class Tracker(object):
                 if not self.no_vis_on_first_frame:
                     self.visualizer.vis(
                         idx, 0, gt_depth, gt_color, c2w, self.c, self.decoders)
-                # added (6/30)
-                pre_c2w = gt_c2w
+            
 
-            else:
+            elif (idx % self.rgbd_every_frame == 0):
+                
                 gt_camera_tensor = get_tensor_from_camera(gt_c2w)
                 if self.const_speed_assumption and idx-2 >= 0:
                     pre_c2w = pre_c2w.float()
@@ -479,53 +491,49 @@ class Tracker(object):
                 
                 # print(f"loss_camera_tensor: {loss_camera_tensor}\n")
                 
-                rgbd_available = (idx % self.rgbd_every_frame == 0)
-                #rgbd_available = True
-                loss_event_backward = False
-                if rgbd_available:
-                    if loss_event_backward:
+    
+                loss_event_backward = True
+                if loss_event_backward:
 
-                        loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)- candidate_cam_tensor).mean().item()
-                        print(f"loss_camera_tensor before loss_event backward: {loss_camera_tensor}\n")
+                    loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)- candidate_cam_tensor).mean().item()
+                    print(f"loss_camera_tensor before loss_event backward: {loss_camera_tensor}\n")
 
-                        candidate_cam_tensor  = self.asynchronous_event_sampling_optimize(idx_tensor, camera_tensor,  
+                    candidate_cam_tensor  = self.asynchronous_event_sampling_optimize(idx_tensor, camera_tensor,  
                                                                             pre_gt_color, gt_depth, gt_event_integrate,
                                                                             self.optim_quats_init, self.optim_trans_init,
                                                                             estimated_new_cam_c2w,
                                                                             gt_color)       
 
-                        loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)- candidate_cam_tensor).mean().item()
-                        print(f"loss_camera_tensor after loss_event backward: {loss_camera_tensor}\n")
+                    loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)- candidate_cam_tensor).mean().item()
+                    print(f"loss_camera_tensor after loss_event backward: {loss_camera_tensor}\n")
 
-                    for cam_iter in range(self.num_cam_iters):
-                        self.visualizer.vis(
-                            idx, cam_iter, gt_depth, gt_color, camera_tensor, self.c, self.decoders)
+                for cam_iter in range(self.num_cam_iters):
+                    self.visualizer.vis(
+                        idx, cam_iter, gt_depth, gt_color, camera_tensor, self.c, self.decoders)
 
-                        estimated_correct_cam_trans = self.transNet.forward(idx_tensor).unsqueeze(0)
-                        estimated_new_cam_quad = self.quatsNet.forward(idx_tensor).unsqueeze(0)
-                        estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad)
-                        estimated_correct_new_cam_c2w = torch.concat([estimated_correct_cam_rots, estimated_correct_cam_trans[...,None] ],dim=-1).squeeze()
-                        bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape([1, 4])).type(torch.float32).to(device)
-                        estimated_correct_new_cam_c2w_homogeneous= torch.cat([estimated_correct_new_cam_c2w, bottom], dim=0)
-                        compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
-                        camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
-                        loss_rgbd  = self.optimize_cam_rgbd(camera_tensor, gt_color, gt_depth, self.tracking_pixels,
+                    estimated_correct_cam_trans = self.transNet.forward(idx_tensor).unsqueeze(0)
+                    estimated_new_cam_quad = self.quatsNet.forward(idx_tensor).unsqueeze(0)
+                    estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad)
+                    estimated_correct_new_cam_c2w = torch.concat([estimated_correct_cam_rots, estimated_correct_cam_trans[...,None] ],dim=-1).squeeze()
+                    bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape([1, 4])).type(torch.float32).to(device)
+                    estimated_correct_new_cam_c2w_homogeneous= torch.cat([estimated_correct_new_cam_c2w, bottom], dim=0)
+                    compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
+                    camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
+                    loss_rgbd  = self.optimize_cam_rgbd(camera_tensor, gt_color, gt_depth, self.tracking_pixels,
                                                             self.optim_quats_init, self.optim_trans_init)
                         
-                        print("RGBD loss: ", loss_rgbd)
-                        #print("Event loss : ", loss_event)
-                        print("\n")
+                    print(f"RGBD loss:{loss_rgbd}\n")
+        
                     
-                        loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)-camera_tensor).mean().item()
-                        print("camera tensor error: ", loss_camera_tensor)
-                        print("\n")
+                    loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)-camera_tensor).mean().item()
+                    print(f"camera tensor error: {loss_camera_tensor}\n")
 
-                        if cam_iter == 0:
-                            initial_loss_rgbd = loss_rgbd
-                            #initial_loss_event = loss_event
+
+                    if cam_iter == 0:
+                        initial_loss_rgbd = loss_rgbd
                     
-                        if self.verbose:
-                            if cam_iter == self.num_cam_iters-1:
+                    if self.verbose:
+                        if cam_iter == self.num_cam_iters-1:
                                 # if rgbd_available:
                                 print(
                                     f'RGBD loss: {initial_loss_rgbd:.2f}->{loss_rgbd:.2f} ' +
@@ -547,19 +555,19 @@ class Tracker(object):
 
                     # use event loss as criteria because it is always available
                     # NOTE : rgbd_availableのときは，loss_rgbd使った方がいいかも？？
-                        if loss_rgbd < current_min_loss:
+                    if loss_rgbd < current_min_loss:
                             current_min_loss = loss_rgbd
                             candidate_cam_tensor = camera_tensor.clone().detach()
 
-                    bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape(
+                bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape(
                         [1, 4])).type(torch.float32).to(self.device)
-                    print("candidate_cam_tensor:", candidate_cam_tensor)
-                    c2w = get_camera_from_tensor(
-                    candidate_cam_tensor.clone().detach())
-                    c2w = torch.cat([c2w, bottom], dim=0)
-                    self.estimate_c2w_list[idx] = c2w.clone().cpu()
-                    self.gt_c2w_list[idx] = gt_c2w.clone().cpu()
-                    pre_c2w = c2w.clone()
+                print("candidate_cam_tensor:", candidate_cam_tensor)
+                c2w = get_camera_from_tensor(
+                candidate_cam_tensor.clone().detach())
+                c2w = torch.cat([c2w, bottom], dim=0)
+            self.estimate_c2w_list[idx] = c2w.clone().cpu()
+            self.gt_c2w_list[idx] = gt_c2w.clone().cpu()
+            pre_c2w = c2w.clone()
             self.idx[0] = idx
             if self.low_gpu_mem:
                 torch.cuda.empty_cache()
