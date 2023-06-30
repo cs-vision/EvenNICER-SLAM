@@ -632,7 +632,7 @@ class Replica_event_txt(Replica):
             event_data = np.loadtxt(self.event_paths[index_event])
 
         else:
-            event_data = np.zeros_like(color_data)
+            event_data = np.zeros((1, 4))
         event_data = torch.from_numpy(event_data)
         
         if '.png' in depth_path:

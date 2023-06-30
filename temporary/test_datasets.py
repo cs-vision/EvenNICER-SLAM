@@ -139,7 +139,7 @@ def main():
                         help='event input folder, this have higher priority, can overwrite the one in config file')
     
     args = parser.parse_args()
-    cfg = config.load_config('configs/Replica/room0_test.yaml')
+    cfg = config.load_config('/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/configs/Replica/room0_test_asynchronous.yaml')
     # slam = EvenNICER_SLAM(cfg, args)
     frame_reader = get_dataset(
             cfg, args, scale=1)
@@ -153,21 +153,35 @@ def main():
       gt_color = gt_color[0]
       gt_event = gt_event[0]
       gt_c2w = gt_c2w[0]
-      gt_camera_tensor = get_tensor_from_camera(gt_c2w)
-      print(idx)
-      start_time = time.time()
-      #rescale_tensor_image(gt_depth, gt_color, 4)
-      #break
-      pre_gt_color = gt_color
+    
       if idx > 0:
-         count = asynchronous_event_sampling_optimize(pre_gt_color, gt_event, gt_depth, gt_camera_tensor)
-         print(count)
-         # NOTE : 1frameで大体100~400くらいのpixelでevents>=10
-         #print(events_array.shape)
-         break
-      end_time = time.time()
-      execution_time = end_time - start_time
-      print(f"実行時間: {execution_time}秒")
+        gt_event_array = gt_event.cpu().numpy()
+        for event in gt_event_array:
+            i = int(event[0])
+            j = int(event[1])
+            event_value = float(event[2])
+            time = torch.tensor(event_value*120, dtype=torch.double).unsqueeze(0)
+        print(time)
+        if idx % 5 == 1:
+           gt_integrate = gt_event
+        else:
+            gt_integrate = torch.cat((gt_integrate, gt_event), dim = 0)
+        #print(gt_integrate.shape)
+      
+      if idx == 13:
+          break
+    
+    
+      #pre_gt_color = gt_color
+    #   if idx > 0:
+    #      count = asynchronous_event_sampling_optimize(pre_gt_color, gt_event, gt_depth, gt_camera_tensor)
+    #      print(count)
+    #      # NOTE : 1frameで大体100~400くらいのpixelでevents>=10
+    #      #print(events_array.shape)
+    #      break
+      # end_time = time.time()
+      # execution_time = end_time - start_time
+      # print(f"実行時間: {execution_time}秒")
       
       
   
