@@ -44,6 +44,13 @@ def rgb_to_luma(rgb, esim=True):
     luma = torch.sum(rgb * factors[None, :], axis=-1)  # (N_evs, 3) * (1, 3) => (N_evs)
     return luma[..., None]  # (N_evs, 1)
 
+
+def log(self, color):
+    log_rgb = torch.log(color*255 /(255 + 1e-3))
+    return log_rgb
+
+def 
+
 def lin_log(color, linlog_thres=20):
     """
     Input: 
@@ -135,7 +142,6 @@ def main():
             cnt += 1
             i = int(event[0]) # W
             j = int(event[1]) # H 
-            print()
             events_array[j][i] += event[3]
     gt_loggray_events = pre_gt_loggray.squeeze() + events_array*C_thres
 
