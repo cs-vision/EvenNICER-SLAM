@@ -283,12 +283,14 @@ class Tracker(object):
             gt_loggray_events = pre_gt_loggray -  gt_pos * C_thres + gt_neg * C_thres
             #print(f"gt_loggray_events {gt_loggray_events }") NOTE: 4frame目で4~6くらい
         
-            gt_inverse_loggray = torch.clamp(self.inverse_lin_log(gt_loggray_events), 0, 1)
+            gt_inverse_loggray = torch.clamp(self.inverse_lin_log(gt_loggray_events), 0, 255)
+            # NOTE: (0, 1)にしてもあんまり精度は変わらない
             #print(f"gt_inverse_loggray{gt_inverse_loggray}")
             gt_inverse_loggray_np = gt_inverse_loggray.cpu().numpy().clip(0, 255)
 
             # 3. define event_loss
             loss_event = torch.abs(gt_inverse_loggray - rendered_gray*255).sum()
+            #loss_event = torch.abs(gt_loggray_events - rendered_gray_log).sum()
             loss_event_np = np.abs(gt_inverse_loggray_np - rendered_gray_np)
 
             balancer = self.cfg['event']['balancer'] # coefficient to balance event loss and rgbd loss
