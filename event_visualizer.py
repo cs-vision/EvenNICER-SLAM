@@ -45,11 +45,9 @@ def rgb_to_luma(rgb, esim=True):
     return luma[..., None]  # (N_evs, 1)
 
 
-def log(self, color):
-    log_rgb = torch.log(color*255 /(255 + 1e-3))
-    return log_rgb
-
-def 
+# def log(self, color):
+#     log_rgb = torch.log(color*255 /(255 + 1e-3))
+#     return log_rgb
 
 def lin_log(color, linlog_thres=20):
     """
@@ -111,22 +109,23 @@ def main():
     frame_reader = get_dataset(cfg, args, scale, device = 'cpu')
     n_img = len(frame_reader)
 
-    idx, pre_gt_color, gt_depth, _, gt_c2w = frame_reader[1] 
+    idx, pre_gt_color, gt_depth, _, gt_c2w, _, _, _= frame_reader[1] 
     H = 680
     W = 1200
     pre_gt_color = F.interpolate(pre_gt_color.permute(2, 0, 1).unsqueeze(0), (H//4, W//4)).squeeze().permute(1, 2, 0)
-    pre_gt_gray = rgb_to_luma(pre_gt_color, esim=True)
-    pre_gt_gray_np = (pre_gt_gray*255).cpu().numpy()
-    pre_gt_loggray = lin_log(pre_gt_gray*255, linlog_thres=20)
+    pre_gt_gray = rgb_to_luma(pre_gt_color*255, esim=True)
+    pre_gt_gray_np = pre_gt_gray.cpu().numpy()
+    pre_gt_loggray = lin_log(pre_gt_gray, linlog_thres=20)
     pre_gt_loggray_np = pre_gt_loggray.cpu().numpy()
     experiment.log({
          'Gray': {'GT Gray' : wandb.Image(pre_gt_gray_np)},
          'Gray_log' : {'GT LogGray' : wandb.Image(pre_gt_loggray_np)},
     })
 
-    idx, gt_color, _, gt_event, _ = frame_reader[2] 
+    idx, gt_color, _, gt_event, _ , _, _, _= frame_reader[2] 
     gt_color = F.interpolate(gt_color.permute(2, 0, 1).unsqueeze(0), (H//4, W//4)).squeeze().permute(1, 2, 0)
-    gt_gray = rgb_to_luma(gt_color, esim=True)
+    gt_gray = rgb_to_luma(gt_color*255, esim=True)
+    gt_loggray = lin_log(gt_gray, linlog_thres=20)
     gt_gray_np = (gt_gray*255).cpu().numpy()
 
     # gt_pos = torch.unsqueeze(gt_event[:, :, 0] , dim = 2)
@@ -144,9 +143,17 @@ def main():
             j = int(event[1]) # H 
             events_array[j][i] += event[3]
     gt_loggray_events = pre_gt_loggray.squeeze() + events_array*C_thres
+    print(gt_loggray.squeeze())
+    print(pre_gt_loggray.squeeze())
+    print(gt_loggray_events)
+
+    print(gt_loggray.squeeze() - pre_gt_loggray.squeeze())
+    print(events_array*C_thres)
 
     #gt_loggray_events = gt_loggray -  gt_pos * C_thres + gt_neg * C_thres
     gt_inverse_loggray = inverse_lin_log(gt_loggray_events)
+    print(gt_gray.squeeze())
+    print(gt_inverse_loggray)
     gt_inverse_loggray_np = gt_inverse_loggray.cpu().numpy().clip(0, 255)
 
     #gt_residual_np = np.abs(gt_inverse_loggray_np - gt_gray_np)
