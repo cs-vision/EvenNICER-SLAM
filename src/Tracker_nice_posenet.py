@@ -73,6 +73,7 @@ class Tracker(object):
         # NOTE : PoseNet
         self.transNet = transNet(self.cfg)
         self.quatsNet = quatsNet(self.cfg)
+        self.use_last = False
         # self.quaternion = slam.quaternion
         # self.pose = slam.pose
 
@@ -299,12 +300,26 @@ class Tracker(object):
                     if loss < current_min_loss:
                         current_min_loss = loss
                         candidate_cam_tensor = camera_tensor.to(device)
-                bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape(
+                        if not self.use_loss:
+                            candidate_transNet_para = self.transNet.state_dict()
+                            candidate_quatsNet_para = self.quatsNet.state_dict()
+                bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).shape(
                     [1, 4])).type(torch.float32).to(self.device)
                 print("candidate_cam_tensor:", candidate_cam_tensor)
-                c2w = get_camera_from_tensor(
-                    candidate_cam_tensor.clone().detach())
-                c2w = torch.cat([c2w, bottom], dim=0)
+                if self.use_last:
+                    c2w = get_camera_from_tensor(
+                    camera_tensor.clone().detach())
+                    c2w = torch.cat([c2w, bottom], dim=0)
+                else:
+                    c2w = get_camera_from_tensor(
+                        candidate_cam_tensor.clone().detach())
+                    c2w = torch.cat([c2w, bottom], dim=0)
+                
+                self.transNet.load_state_dict(candidate_transNet_para)
+                self.quatsNet.load_state_dict(candidate_quatsNet_para)
+                del candidate_transNet_para
+                del candidate_quatsNet_para
+
             self.estimate_c2w_list[idx] = c2w.clone().cpu()
             self.gt_c2w_list[idx] = gt_c2w.clone().cpu()
             pre_c2w = c2w.clone()
