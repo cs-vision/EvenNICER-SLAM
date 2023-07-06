@@ -391,7 +391,6 @@ class Tracker(object):
                     camera_tensor = Variable(
                         camera_tensor.to(device), requires_grad=True)
                     cam_para_list = [camera_tensor]
-                    # TODO : incorporate PoseNet 
                     optimizer_camera = torch.optim.Adam(
                         cam_para_list, lr=self.cam_lr)
                 
@@ -423,7 +422,8 @@ class Tracker(object):
                     print("RGBD loss: ", loss_rgbd)
                     print("Event loss : ", loss_event)
                     print("\n")
-                    
+                    print(gt_camera_tensor)
+                    print(camera_tensor)
                     loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)-camera_tensor).mean().item()
 
                     self.visualizer.vis(
@@ -452,6 +452,7 @@ class Tracker(object):
                                     'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
                                     'Frame': idx,
                                     'Camera quaternion first element' : camera_tensor[0], 
+                                    'GT Camera quatenion first element' : gt_camera_tensor[0]
                                 }
 
                                 self.experiment.log(dict_log)
@@ -469,6 +470,7 @@ class Tracker(object):
                                    'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
                                    'Frame': idx,
                                    'Camera quaternion first element' : camera_tensor[0], 
+                                   'GT Camera quaternion first element' : gt_camera_tensor[0]
                                 }
 
                                 self.experiment.log(dict_log)
