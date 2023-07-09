@@ -3,6 +3,7 @@ import argparse
 import cv2
 import os
 import time
+import random
 
 import numpy as np
 import torch
@@ -139,7 +140,7 @@ def main():
                         help='event input folder, this have higher priority, can overwrite the one in config file')
     
     args = parser.parse_args()
-    cfg = config.load_config('/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/configs/Replica/room0_test_asynchronous.yaml')
+    cfg = config.load_config('/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/configs/Replica/room0.yaml')
     # slam = EvenNICER_SLAM(cfg, args)
     frame_reader = get_dataset(
             cfg, args, scale=1)
@@ -147,29 +148,67 @@ def main():
 
     # TODO : change frame_loader() and remove gt_mask
     # TODO : framewise → asynchronous
-    for idx, gt_color, gt_depth, gt_event, gt_c2w in pbar:
+    for idx, gt_color, gt_depth, gt_event, gt_c2w, evs_dict_xy, pos_evs_dict_xy, neg_evs_dict_xy in pbar:
       idx = idx[0]
       gt_depth = gt_depth[0]
       gt_color = gt_color[0]
       gt_event = gt_event[0]
       gt_c2w = gt_c2w[0]
-    
-      if idx > 0:
-        gt_event_array = gt_event.cpu().numpy()
-        for event in gt_event_array:
-            i = int(event[0])
-            j = int(event[1])
-            event_value = float(event[2])
-            time = torch.tensor(event_value*120, dtype=torch.double).unsqueeze(0)
-        print(time)
-        if idx % 5 == 1:
-           gt_integrate = gt_event
-        else:
-            gt_integrate = torch.cat((gt_integrate, gt_event), dim = 0)
-        #print(gt_integrate.shape)
+
+      x = np.arange(300) # W
+      y = np.arange(170) # H
+      no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
+      gt_event_array = gt_event.cpu().numpy()
       
-      if idx == 13:
+      if idx == 1:
+          noevs_first_time = [(idx - 1) / 120]*5
+          #noevs_last_time = [torch.tensor((idx/(24*5)), dtype=torch.float64) for _ in range(5)]
+          noevs_last_time = [idx / 120]*5
+          xys_mtNevs = list(evs_dict_xy.keys())
+          sampled_xys = random.sample(xys_mtNevs, k=5)
+          events_first_time = []
+          events_last_time = []
+          first_events_polarity = []
+          for xy in sampled_xys:
+              events_time_stamps = []
+              events_time_stamps.append([item[2] for item in evs_dict_xy[xy]])
+              events_first_time.append(events_time_stamps[0][0][0])
+              events_last_time.append(events_time_stamps[0][-1][0])
+
+              events_polarities = []
+              events_polarities.append([item[3] for item in evs_dict_xy[xy]])
+              first_events_polarity.append(events_polarities[0][0][0])
+
+              #print(evs_dict_xy[xy])
+              #print(evs_dict_xy[xy][:, 2])
+              #events_time_stamps.append(evs_dict_xy[xy][:, 2])
+          print(events_first_time)
+          print(noevs_first_time)
+          print(noevs_last_time)
+          print(np.array(first_events_polarity))
+          #print(noevs_first_time + events_first_time)
           break
+          
+
+    
+          
+    
+      # if idx > 0:
+      #   gt_event_array = gt_event.cpu().numpy()
+      #   for event in gt_event_array:
+      #       i = int(event[0])
+      #       j = int(event[1])
+      #       event_value = float(event[2])
+      #       time = torch.tensor(event_value*120, dtype=torch.double).unsqueeze(0)
+      #   print(time)
+      #   if idx % 5 == 1:
+      #      gt_integrate = gt_event
+      #   else:
+      #       gt_integrate = torch.cat((gt_integrate, gt_event), dim = 0)
+      #   #print(gt_integrate.shape)
+      
+      # if idx == 13:
+      #     break
     
     
       #pre_gt_color = gt_color
