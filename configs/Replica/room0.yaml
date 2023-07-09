@@ -1,4 +1,5 @@
 inherit_from: configs/Replica/replica.yaml
+# dataset: 'replica_event'
 mapping:
   bound: [[-2.9,8.9],[-3.2,5.5],[-3.5,3.3]]
   marching_cubes_bound: [[-2.9,8.9],[-3.2,5.5],[-3.5,3.3]]
@@ -6,5 +7,5 @@ data:
   input_folder: Datasets/Replica/room0
   output: output/Replica/room0
   # event folder
-  event_folder: Datasets/replica_gt_png/room0
-  #event_folder: Datasets/replica_gt_events/room0
+  #event_folder: Datasets/replica_gt_png/room0
+  event_folder: Datasets/replica_gt_events/room0

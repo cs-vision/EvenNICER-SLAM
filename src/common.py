@@ -251,12 +251,17 @@ def get_tensor_from_camera(RT, Tquad=False):
     return tensor
 
 def get_tensor_from_camera_in_pytorch(RT, Tquad=False):
-    R, T = RT[:3, :3], RT[:3, 3]
+    N = len(RT.shape)
+    if N == 2:
+        RT = RT.unsqueeze(0)
+    R, T = RT[:, :3, :3], RT[:, :3, 3]
     quaternion = matrix_to_quaternion(R)
     if Tquad:
-        tensor = torch.cat((T, quaternion), 0)
+        tensor = torch.cat((T, quaternion), 1)
     else:
-        tensor = torch.cat((quaternion, T), 0)
+        tensor = torch.cat((quaternion, T), 1)
+    if N == 2:
+        tensor = tensor[0]
     return tensor
 
 def raw2outputs_nerf_color(raw, z_vals, rays_d, occupancy=False, device='cuda:0'):
