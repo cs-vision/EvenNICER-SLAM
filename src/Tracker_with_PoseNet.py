@@ -78,13 +78,8 @@ class Tracker(object):
         self.H, self.W, self.fx, self.fy, self.cx, self.cy = slam.H, slam.W, slam.fx, slam.fy, slam.cx, slam.cy
 
         # NOTE : PoseNet
-<<<<<<< HEAD
         self.transNet = transNet(self.cfg)
         self.quatsNet = quatsNet(self.cfg)
-=======
-        self.transNet = slam.transNet
-        self.quatsNet = slam.quatsNet
->>>>>>> 15c2b157b0c904868051cb9af55e1fc5755cf2fb
         self.use_last = False
     
         # RGBD available condition
