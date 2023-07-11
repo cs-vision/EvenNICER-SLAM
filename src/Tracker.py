@@ -441,10 +441,15 @@ class Tracker(object):
                                     'Camera error': loss_camera_tensor,
                                     'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
                                     'Frame': idx,
+<<<<<<< HEAD
                                     'first element of quaternion' : camera_tensor[0], 
                                     'first element of gt quaternion' : gt_camera_tensor[0],
                                     'first element of translation' : camera_tensor[4],
                                     'first element of gt translation' : gt_camera_tensor[4]
+=======
+                                    'Camera quaternion first element' : camera_tensor[0], 
+                                    'GT Camera quatenion first element' : gt_camera_tensor[0]
+>>>>>>> 15c2b157b0c904868051cb9af55e1fc5755cf2fb
                                 }
 
                                 self.experiment.log(dict_log)
@@ -461,10 +466,15 @@ class Tracker(object):
                                    'Camera error': loss_camera_tensor,
                                    'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
                                    'Frame': idx,
+<<<<<<< HEAD
                                    'first element of quaternion' : camera_tensor[0], 
                                    'first element of gt quaternion' : gt_camera_tensor[0],
                                    'first element of translation' : camera_tensor[4],
                                    'first element of gt translation' : gt_camera_tensor[4]
+=======
+                                   'Camera quaternion first element' : camera_tensor[0], 
+                                   'GT Camera quaternion first element' : gt_camera_tensor[0]
+>>>>>>> 15c2b157b0c904868051cb9af55e1fc5755cf2fb
                                 }
 
                                 self.experiment.log(dict_log)

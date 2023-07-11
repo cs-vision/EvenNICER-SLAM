@@ -78,8 +78,13 @@ class Tracker(object):
         self.H, self.W, self.fx, self.fy, self.cx, self.cy = slam.H, slam.W, slam.fx, slam.fy, slam.cx, slam.cy
 
         # NOTE : PoseNet
+<<<<<<< HEAD
         self.transNet = transNet(self.cfg)
         self.quatsNet = quatsNet(self.cfg)
+=======
+        self.transNet = slam.transNet
+        self.quatsNet = slam.quatsNet
+>>>>>>> 15c2b157b0c904868051cb9af55e1fc5755cf2fb
         self.use_last = False
     
         # RGBD available condition
@@ -377,7 +382,7 @@ class Tracker(object):
                                                                            self.optim_quats_init, self.optim_trans_init,
                                                                            pre_gt_color, 
                                                                            #pre_gt_depth,
-                                                                           rgbd=True)
+                                                                           rgbd=False)
                     else:
                         loss_rgbd, loss_event = self.optimize_cam_in_batch(camera_tensor, gt_color, gt_depth, gt_event_integrate, self.tracking_pixels,
                                                                             self.optim_quats_init, self.optim_trans_init,
