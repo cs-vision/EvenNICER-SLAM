@@ -2,6 +2,7 @@ import copy
 import os
 import time
 
+
 import numpy as np
 import torch
 from colorama import Fore, Style
@@ -10,7 +11,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.common import (get_camera_from_tensor, get_samples,
-                        get_tensor_from_camera, quad2rotation,get_tensor_from_camera_in_pytorch,
+                        get_tensor_from_camera, 
+                        quad2rotation, get_tensor_from_camera_in_pytorch,
                         get_samples_event)
 from src.utils.datasets import get_dataset
 from src.utils.Visualizer import Visualizer
@@ -19,7 +21,9 @@ from src.utils.Visualizer import Visualizer
 # TODO : wandb should be in Visualizer class
 import wandb
 
-from pose_net import transNet, quatsNet
+# PoseNet
+from pose_net import transNet,quatsNet
+
 
 class Tracker(object):
     def __init__(self, cfg, args, slam
@@ -68,12 +72,9 @@ class Tracker(object):
             cfg, args, self.scale, device=self.device)
         self.n_img = len(self.frame_reader)
         self.frame_loader = DataLoader(
-            self.frame_reader, batch_size=1, shuffle=False, num_workers=0) # to avoid "RuntimeError: unable to mmap 128 bytes from file </torch_6409_1637078694_63344>: Cannot allocate memory (12)"
+            self.frame_reader, batch_size=1, shuffle=False, num_workers=0)
         
         self.slam = slam
-        # PoseNet
-        self.transNet = slam.transNet
-        self.quatsNet = slam.quatsNet
 
         # wandb
         self.experiment = slam.experiment
@@ -91,11 +92,13 @@ class Tracker(object):
         # RGBD available condition
         self.rgbd_every_frame = cfg['event']['rgbd_every_frame']
 
-    def init_posenet_train(self):
-        self.optim_trans_init = torch.optim.Adam([dict(params=self.transNet.parameters(), lr = self.cam_lr*1)]) # TODO ; 10→1
-        self.optim_quats_init = torch.optim.Adam([dict(params=self.quatsNet.parameters() , lr = self.cam_lr*0.2)])
-        self.optim_trans_init.zero_grad()
-        self.optim_quats_init.zero_grad()
+        # Event loss whether log or gray
+        self.event_loss_log = False
+        
+        # PoseNet
+        self.transNet = transNet(self.cfg)
+        self.quatsNet = quatsNet(self.cfg)
+        self.use_last = False 
 
     # TODO : import  as e-sim class
     def rgb_to_luma(self, rgb, esim=True):
@@ -151,6 +154,12 @@ class Tracker(object):
             torch.exp(lin_log_rgb)
         )
         return inverse_lin_log_rgb
+    
+    def init_posenet_train(self, scale_t=1, scale_q=1):
+        self.optim_trans_init = torch.optim.Adam([dict(params=self.transNet.parameters(), lr = self.cam_lr*1*scale_t)]) 
+        self.optim_quats_init = torch.optim.Adam([dict(params=self.quatsNet.parameters() , lr = self.cam_lr*0.2*scale_q)])
+        self.optim_trans_init.zero_grad()
+        self.optim_quats_init.zero_grad()
 
     def optimize_cam_in_batch(self, camera_tensor, 
                               gt_color, gt_depth, gt_event,
@@ -177,47 +186,19 @@ class Tracker(object):
         H, W, fx, fy, cx, cy = self.H, self.W, self.fx, self.fy, self.cx, self.cy
         optim_quats_init.zero_grad()
         optim_trans_init.zero_grad()
-
         c2w = get_camera_from_tensor(camera_tensor)
         Wedge = self.ignore_edge_W
         Hedge = self.ignore_edge_H
 
 
         if event:
-            # NOTE: gt_depth should be None (in if event:)
-            # NOTE: render_img takes so much time → sampling
-            # _, _, full_color_current = self.renderer.render_img(self.c, self.decoders, c2w, self.device, stage='color', gt_depth=gt_depth)
-            # full_color_current = torch.clamp(full_color_current, 0, 1)
             batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
                 Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, self.device)
-            
-            # TODO: gt_depth should be removed from input (unaccessible), gt_depth == None the accuracy dropped a lot
-            # NOTE : pre_gt_depthにすると精度が若干(？)下がる, c2wと対応しているdepthだから？？　特にRGBD-loss
-            # if rgbd : 
-            #     batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
-            #         Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, self.device)
-            #     ret_event = self.renderer.render_batch_ray(
-            #         self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
-            #     _, event_uncertainty, rendered_color = ret_event
-            
-            # else:
-            #     batch_rays_o, batch_rays_d, batch_pre_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_event(
-            #         Hedge, H-Hedge, Wedge, W-Wedge, batch_size, H, W, fx, fy, cx, cy, c2w, pre_gt_depth, pre_gt_color, gt_event, self.device) 
-            #     ret_event = self.renderer.render_batch_ray(
-            #         self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_pre_gt_depth)
-            #     _, event_uncertainty, rendered_color = ret_event
 
             ret_event = self.renderer.render_batch_ray(
                 self.c, self.decoders, batch_rays_d, batch_rays_o,  self.device, stage='color',  gt_depth=batch_gt_depth)
             _, event_uncertainty, rendered_color = ret_event
 
-            # TODO : shoule be removed 
-            # rendered_color → full_current_color
-            # batch_pre_gt_color　→ pre_gt_color
-            # batch_gt_event → gt_event
-            full_color_current = rendered_color
-            pre_gt_color = batch_pre_gt_color
-            gt_event = batch_gt_event
         
         if rgbd: 
             batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color = get_samples(
@@ -250,7 +231,6 @@ class Tracker(object):
         if rgbd:
             loss_rgbd = (torch.abs(batch_gt_depth-depth) /
                     torch.sqrt(uncertainty+1e-10))[mask].sum()
-            
 
             if self.use_color_in_tracking:
                 color_loss = torch.abs(
@@ -270,16 +250,12 @@ class Tracker(object):
         if event:
             # TODO  : define loss event 
             # 1. pre_gt_color(batch), full_color_current are converted to gray scale and log scale
-      
-            color_np = full_color_current.detach().cpu().numpy()
-            color_np = np.clip(color_np, 0, 1)
         
-            rendered_gray = torch.clamp(self.rgb_to_luma(full_color_current, esim=True), 0, 1)
+            rendered_gray = self.rgb_to_luma(rendered_color, esim=True)
             rendered_gray_log = self.lin_log(rendered_gray*255, linlog_thres=20)
-            rendered_gray_np = (rendered_gray*255).detach().cpu().numpy()
         
-            pre_gt_gray = self.rgb_to_luma(pre_gt_color, esim=True)
-            pre_gt_loggray = self.lin_log(pre_gt_gray*255, linlog_thres=20)
+            batch_pre_gt_gray = self.rgb_to_luma(batch_pre_gt_color, esim=True)
+            batch_pre_gt_loggray = self.lin_log(batch_pre_gt_gray*255, linlog_thres=20)
 
             # 2. add events to pre_gt_gray(batch)
             # ↓original
@@ -287,22 +263,24 @@ class Tracker(object):
             # gt_neg = torch.unsqueeze(gt_event[:, :, 1] , dim = 2)
             # after sampling. gt_event != (H, W ,2)
 
-            gt_pos = torch.unsqueeze(gt_event[:, 0] , dim = 1)
-            gt_neg = torch.unsqueeze(gt_event[:, 1] , dim = 1)
+            gt_pos = torch.unsqueeze(batch_gt_event[:, 0] , dim = 1)
+            gt_neg = torch.unsqueeze(batch_gt_event[:, 1] , dim = 1)
 
             C_thres = 0.1
-            gt_loggray_events = pre_gt_loggray -  gt_pos * C_thres + gt_neg * C_thres
-            #print(f"gt_loggray_events {gt_loggray_events }") NOTE: 4frame目で4~6くらい
+            batch_gt_loggray_events = batch_pre_gt_loggray -  gt_pos * C_thres + gt_neg * C_thres
         
-            gt_inverse_loggray = torch.clamp(self.inverse_lin_log(gt_loggray_events), 0, 255)
-            # NOTE: (0, 1)にしてもあんまり精度は変わらない
-            #print(f"gt_inverse_loggray{gt_inverse_loggray}")
-            gt_inverse_loggray_np = gt_inverse_loggray.cpu().numpy().clip(0, 255)
+            batch_gt_inverse_loggray = self.inverse_lin_log(batch_gt_loggray_events)
 
             # 3. define event_loss
-            loss_event = torch.abs(gt_inverse_loggray - rendered_gray*255).sum()
-            #loss_event = torch.abs(gt_loggray_events - rendered_gray_log).sum()
-            loss_event_np = np.abs(gt_inverse_loggray_np - rendered_gray_np)
+            if self.event_loss_log:
+                loss_event = torch.abs(batch_gt_loggray_events - rendered_gray_log).sum()
+
+                #print(batch_gt_loggray_events)
+                #print(rendered_gray_log)
+            else:
+                loss_event = torch.abs(batch_gt_inverse_loggray - rendered_gray*255).sum()
+                #print(batch_gt_inverse_loggray)
+                #print(rendered_gray)
 
             balancer = self.cfg['event']['balancer'] # coefficient to balance event loss and rgbd loss
             loss_event = loss_event * balancer
@@ -317,7 +295,6 @@ class Tracker(object):
         
         optim_quats_init.step()
         optim_trans_init.step()
-        #optimizer.step()
         optim_trans_init.zero_grad()
         optim_quats_init.zero_grad()
 
@@ -365,7 +342,7 @@ class Tracker(object):
             pbar = tqdm(self.frame_loader)
 
         # TODO : change frame_loader() and remove gt_mask
-        # TODO : framewise → asynchronous
+        self.init_posenet_train(scale_q=0.1)
         for idx, gt_color, gt_depth, gt_event, gt_mask, gt_c2w in pbar:
             if not self.verbose:
                 pbar.set_description(f"Tracking Frame {idx[0]}")
@@ -429,32 +406,7 @@ class Tracker(object):
                 compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
                 camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
 
-                # camera_tensor = get_tensor_from_camera(
-                #     estimated_new_cam_c2w.detach())
-                # if self.seperate_LR:
-                #     camera_tensor = camera_tensor.to(device).detach()
-                #     T = camera_tensor[-3:]
-                #     quad = camera_tensor[:4]
-                #     cam_para_list_quad = [quad]
-                #     quad = Variable(quad, requires_grad=True)
-                #     T = Variable(T, requires_grad=True)
-                #     camera_tensor = torch.cat([quad, T], 0)
-                #     cam_para_list_T = [T]
-                #     cam_para_list_quad = [quad]
-                #     # TODO : incorporate PoseNet  like↓
-                #     # optimizer = torch.optim.Adam[{'params': PoseNet_para_list, 'lr': 0}, {}]
-                #     # NOTE : why learning rate of quad is lower than that of T ? 
-                #     optimizer_camera = torch.optim.Adam([{'params': cam_para_list_T, 'lr': self.cam_lr},
-                #                                          {'params': cam_para_list_quad, 'lr': self.cam_lr*0.2}])
-                # else:
-                #     camera_tensor = Variable(
-                #         camera_tensor.to(device), requires_grad=True)
-                #     cam_para_list = [camera_tensor]
-                #     # TODO : incorporate PoseNet 
-                #     optimizer_camera = torch.optim.Adam(
-                #         cam_para_list, lr=self.cam_lr)
-                    
-                # NOTE : When asynchronous, gt_camera_tensor is not accessible
+
                 initial_loss_camera_tensor = torch.abs(
                     gt_camera_tensor.to(device)-camera_tensor).mean().item()
                 candidate_cam_tensor = None
@@ -480,6 +432,8 @@ class Tracker(object):
                     estimated_correct_new_cam_c2w_homogeneous= torch.cat([estimated_correct_new_cam_c2w, bottom], dim=0)
                     compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
                     camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
+                    print(gt_camera_tensor)
+                    print(camera_tensor)
 
 
                     rgbd_available = (idx % self.rgbd_every_frame == 0) # align with when mapping is dispatched
@@ -526,7 +480,9 @@ class Tracker(object):
                                     'Event loss improvement': initial_loss_event - loss_event,
                                     'Camera error': loss_camera_tensor,
                                     'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
-                                    'Frame': idx
+                                    'Frame': idx,
+                                    'Camera quaternion first element' : camera_tensor[0], 
+                                    'GT Camera quaternion first element': gt_camera_tensor[0]
                                 }
 
                                 self.experiment.log(dict_log)
@@ -542,7 +498,9 @@ class Tracker(object):
                                    'Event loss improvement' : initial_loss_event - loss_event,
                                    'Camera error': loss_camera_tensor,
                                    'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
-                                   'Frame': idx
+                                   'Frame': idx,
+                                   'Camera quaternion first element' : camera_tensor[0], 
+                                   'GT Camera quaternion first element': gt_camera_tensor[0]
                                 }
 
                                 self.experiment.log(dict_log)
@@ -551,18 +509,30 @@ class Tracker(object):
                     if loss_event < current_min_loss_event:
                         current_min_loss_event = loss_event
                         candidate_cam_tensor = camera_tensor.clone().detach()
-
-                    # TODO : redefine vis_event in visualizer.py
-                    # self.visualizer.vis_event(
-                    #     idx, cam_iter, gt_depth, gt_color, gt_event, gt_event_lores, pred_event, 
-                    #     gts_event_list, preds_event_list, 
-                    #     camera_tensor, self.c, self.decoders)
+                        if not self.use_last:
+                            # save the best parameters
+                            candidate_transNet_para = self.transNet.state_dict()
+                            candidate_quatsNet_para = self.quatsNet.state_dict()
 
                 bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape(
                     [1, 4])).type(torch.float32).to(self.device)
-                c2w = get_camera_from_tensor(
-                    candidate_cam_tensor.clone().detach())
-                c2w = torch.cat([c2w, bottom], dim=0)
+                print("candidate_cam_tensor:", candidate_cam_tensor)
+
+                if self.use_last:
+                    c2w = get_camera_from_tensor(
+                        camera_tensor.clone().detach())
+                    c2w = torch.cat([c2w, bottom], dim=0)
+                else:
+                    c2w = get_camera_from_tensor(
+                        candidate_cam_tensor.clone().detach())
+                    c2w = torch.cat([c2w, bottom], dim=0)
+
+                    self.transNet.load_state_dict(candidate_transNet_para)
+                    self.quatsNet.load_state_dict(candidate_quatsNet_para)
+                    del candidate_transNet_para
+                    del candidate_quatsNet_para
+
+
             self.estimate_c2w_list[idx] = c2w.clone().cpu()
             self.gt_c2w_list[idx] = gt_c2w.clone().cpu()
             pre_c2w = c2w.clone()
@@ -571,7 +541,7 @@ class Tracker(object):
             if self.low_gpu_mem:
                 torch.cuda.empty_cache()
             
-            # store previous gt color
+            # NOTE : store previous gt color
             if idx % self.every_frame == 0:
                 pre_gt_depth = gt_depth
                 pre_gt_color = gt_color

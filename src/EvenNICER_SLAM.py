@@ -9,15 +9,14 @@ import torch.multiprocessing as mp
 
 from src import config
 from src.Mapper import Mapper
-from src.Tracker import Tracker
+#from src.Tracker_with_PoseNet_small_learning_rate import Tracker
+from src.Tracker_with_PoseNet import Tracker
 from src.utils.datasets import get_dataset
 from src.utils.Logger import Logger
 from src.utils.Mesher import Mesher
 from src.utils.Renderer import Renderer
 
 from event_net import UNet_2heads
-# PoseNet 
-from pose_net import transNet,quatsNet
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -35,7 +34,6 @@ class EvenNICER_SLAM():
         self.cfg = cfg
         self.args = args
         self.nice = args.nice
-
         self.coarse = cfg['coarse']
         self.occupancy = cfg['occupancy']
         self.low_gpu_mem = cfg['low_gpu_mem']
@@ -102,10 +100,6 @@ class EvenNICER_SLAM():
         self.event_net = self.event_net.to(self.cfg['mapping']['device'])
         self.event_net.share_memory()
         self.scale_factor = self.cfg['event']['scale_factor']
-
-        # NOTE : PoseNet
-        self.transNet = transNet(self.cfg)
-        self.quatsNet = quatsNet(self.cfg)
 
         # initialize wandb
         self.scene_name = cfg['data']['input_folder'].split('/')[-1]
