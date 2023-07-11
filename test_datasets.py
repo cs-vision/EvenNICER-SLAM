@@ -169,6 +169,16 @@ def main():
           events_first_time = []
           events_last_time = []
           first_events_polarity = []
+          evs_set = set(evs_dict_xy.keys())
+          x = np.arange(300)
+          y = np.arange(170)
+          no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
+          no_evs_set = set(map(tuple, no_evs_pixels))
+          print(len(no_evs_set))
+          no_evs_set -= evs_set
+          print(len(no_evs_set))
+          no_evs_pixels = np.array(list(no_evs_set))
+          print(no_evs_pixels.shape)
           for xy in sampled_xys:
               events_time_stamps = []
               events_time_stamps.append([item[2] for item in evs_dict_xy[xy]])
