@@ -9,7 +9,6 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-# NOTE : 
 import torch.nn.functional as F
 
 from src.common import (get_camera_from_tensor, get_samples,
@@ -212,7 +211,8 @@ class Tracker(object):
         noevs_first_time = torch.tensor(noevs_first_time, dtype=torch.float32).reshape(N_noevs, -1).to(device)
         noevs_last_time = torch.tensor(noevs_last_time, dtype=torch.float32).reshape(N_noevs, -1).to(device)
 
-        noevs_pre_ray_o, noevs_pre_ray_d = get_rays_from_uv(noevs_i_tensor, noevs_j_tensor, pre_c2w, H, W, fx, fy, cx, cy, device)
+        
+        #noevs_pre_ray_o, noevs_pre_ray_d = get_rays_from_uv(noevs_i_tensor, noevs_j_tensor, pre_c2w, H, W, fx, fy, cx, cy, device)
         c2w = get_camera_from_tensor(camera_tensor)
         noevs_ray_o, noevs_ray_d = get_rays_from_uv(noevs_i_tensor, noevs_j_tensor, c2w, H, W, fx, fy, cx, cy, device)
         #noevs_pre_ray_o, noevs_pre_ray_d = self.get_event_rays(noevs_i_tensor, noevs_j_tensor, noevs_first_time, pre_c2w, H, W, fx, fy, cx, cy, device, fix=True)
@@ -221,17 +221,17 @@ class Tracker(object):
         noevs_pre_gt_depth = pre_gt_depth[noevs_j_tensor, noevs_i_tensor]
         noevs_gt_depth = gt_depth[noevs_j_tensor, noevs_i_tensor]
 
-        noevs_pre_ret = self.renderer.render_batch_ray(self.c, self.decoders, noevs_pre_ray_d, noevs_pre_ray_o, device, stage='color', gt_depth=noevs_pre_gt_depth)
+        #noevs_pre_ret = self.renderer.render_batch_ray(self.c, self.decoders, noevs_pre_ray_d, noevs_pre_ray_o, device, stage='color', gt_depth=noevs_pre_gt_depth)
         noevs_ret = self.renderer.render_batch_ray(self.c, self.decoders, noevs_ray_d, noevs_ray_o, device, stage='color', gt_depth=noevs_gt_depth)
-        _, _, noevs_pre_color = noevs_pre_ret
+        #_, _, noevs_pre_color = noevs_pre_ret
         _, _, noevs_color = noevs_ret
-        noevs_pre_gray = self.rgb_to_luma(noevs_pre_color)
+        #noevs_pre_gray = self.rgb_to_luma(noevs_pre_color)
         noevs_gray = self.rgb_to_luma(noevs_color)
         pre_gray = self.rgb_to_luma(pre_gt_color)
         pre_gray = pre_gray[noevs_j_tensor, noevs_i_tensor]
-        gt_gray = self.rgb_to_luma(gt_color)
-        gt_gray = gt_gray[noevs_j_tensor, noevs_i_tensor]
-        loss_events = torch.abs(noevs_gray*255 - noevs_pre_gray*255).sum()
+        #gt_gray = self.rgb_to_luma(gt_color)
+        #gt_gray = gt_gray[noevs_j_tensor, noevs_i_tensor]
+        loss_events = torch.abs(noevs_gray*255 - pre_gray*255).sum()
         print(loss_events.item())
         #loss_events = torch.abs(noevs_gray*255 - gt_gray*255).sum()
         #print(gt_gray)
@@ -240,7 +240,7 @@ class Tracker(object):
         #print(torch.abs(noevs_gray*255 - pre_gray*255).sum())
 
         # NOTE : active sampling
-        N_evs = 200
+        N_evs = 1
         xys_mtNevs = list(evs_dict_xy.keys())
         sampled_xys = random.sample(xys_mtNevs, k=N_evs)
         num_pos_evs_at_xy = np.asarray([len(pos_evs_dict_xy.get(xy, [])) for xy in sampled_xys])
@@ -255,12 +255,12 @@ class Tracker(object):
         for xy in sampled_xys:
             events_time_stamps = []
             events_time_stamps.append([item[2] for item in evs_dict_xy[xy]])
-            events_first_time.append(events_time_stamps[0][0][0])
-            events_last_time.append(events_time_stamps[0][-1][0])
+            events_first_time.append(events_time_stamps[0][0])
+            events_last_time.append(events_time_stamps[0][-1])
 
             events_polarities = []
             events_polarities.append([item[3] for item in evs_dict_xy[xy]])
-            first_events_polarity.append(events_polarities[0][0][0])
+            first_events_polarity.append(events_polarities[0][0])
 
         evs_at_xy = num_pos_evs_at_xy*0.1 - num_neg_evs_at_xy*0.1 - np.array(first_events_polarity)*0.1
         evs_at_xy = torch.tensor(evs_at_xy).unsqueeze(1).to(device)
@@ -412,7 +412,7 @@ class Tracker(object):
             pbar = tqdm(self.frame_loader)
         
         self.init_posenet_train(scale=0.1)
-        for idx, gt_color, gt_depth, gt_event, gt_c2w, evs_dict_xy, pos_evs_dict_xy, neg_evs_dict_xy in pbar:
+        for idx, gt_color, gt_depth, gt_event, gt_c2w, _, _, _ in pbar:
             if not self.verbose:
                 pbar.set_description(f"Tracking Frame {idx[0]}")
 
@@ -428,11 +428,7 @@ class Tracker(object):
                 if idx > 0 and (idx % self.every_frame == 1 or self.every_frame == 1):
                     while self.mapping_idx[0] != idx-1:
                         time.sleep(0.1)
-                    pre_c2w = self.estimate_c2w_list[idx-1].to(device) 
-                    gt_event_integrate = gt_event
-                elif idx > 0 and idx % self.every_frame != 1:
-                    gt_event_integrate = torch.cat((gt_event_integrate, gt_event), dim = 0)
-            
+                    #pre_c2w = self.estimate_c2w_list[idx-1].to(device) 
             elif self.sync_method == 'loose':
                 # mapping idx can be later than tracking idx is within the bound of
                 # [-self.every_frame-self.every_frame//2, -self.every_frame+self.every_frame//2]
@@ -482,10 +478,33 @@ class Tracker(object):
                 candidate_cam_tensor = camera_tensor.clone().detach()
                 current_min_loss = 10000000000.
                 current_min_loss_events = 10000000000.
-        
+                
+                gt_event_integrate = torch.cat((gt_event_integrate, gt_event), dim = 0)
                 ev_nerf_loss_backward = True
+                if ev_nerf_loss_backward and idx % 5 == 0:
+                    events_in = gt_event_integrate.cpu().numpy()
+                    pos_evs_dict_xy = {}
+                    neg_evs_dict_xy = {}
+                    evs_dict_xy = {}
+                    for ev in events_in:
+                        key_xy = (ev[0], ev[1])
+                        if key_xy in evs_dict_xy.keys():
+                            evs_dict_xy[key_xy].append(ev.tolist())
+                        else:
+                            evs_dict_xy[key_xy] = [ev.tolist()]
+                        polarity = ev[3]
+                        if polarity == 1.0 and key_xy in pos_evs_dict_xy.keys():
+                            pos_evs_dict_xy[key_xy].append(ev.tolist())
+                        elif polarity == -1.0 and key_xy in neg_evs_dict_xy.keys():
+                            neg_evs_dict_xy[key_xy].append(ev.tolist())
+                        elif polarity == 1.0:
+                            pos_evs_dict_xy[key_xy] = [ev.tolist()]
+                        elif polarity == -1.0:
+                            neg_evs_dict_xy[key_xy] = [ev.tolist()]
 
-                if ev_nerf_loss_backward :
+                    evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
+                    pos_evs_dict_xy = dict((k, v) for k, v in pos_evs_dict_xy.items() if len(v) > 1) 
+                    neg_evs_dict_xy = dict((k, v) for k, v in neg_evs_dict_xy.items() if len(v) > 1) 
                     x = np.arange(self.W//4)
                     y = np.arange(self.H//4)
                     no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
@@ -561,6 +580,38 @@ class Tracker(object):
                         del candidate_quatsNet_para       
 
                 if (idx %  5 == 0):
+                    if ev_nerf_loss_backward == False:
+                        events_in = gt_event_integrate.cpu().numpy()
+                        pos_evs_dict_xy = {}
+                        neg_evs_dict_xy = {}
+                        evs_dict_xy = {}
+                        for ev in events_in:
+                            key_xy = (ev[0], ev[1])
+                            if key_xy in evs_dict_xy.keys():
+                                evs_dict_xy[key_xy].append(ev.tolist())
+                            else:
+                                evs_dict_xy[key_xy] = [ev.tolist()]
+                            polarity = ev[3]
+                            if polarity == 1.0 and key_xy in pos_evs_dict_xy.keys():
+                                pos_evs_dict_xy[key_xy].append(ev.tolist())
+                            elif polarity == -1.0 and key_xy in neg_evs_dict_xy.keys():
+                                neg_evs_dict_xy[key_xy].append(ev.tolist())
+                            elif polarity == 1.0:
+                                pos_evs_dict_xy[key_xy] = [ev.tolist()]
+                            elif polarity == -1.0:
+                                neg_evs_dict_xy[key_xy] = [ev.tolist()]
+
+                        evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
+                        pos_evs_dict_xy = dict((k, v) for k, v in pos_evs_dict_xy.items() if len(v) > 1) 
+                        neg_evs_dict_xy = dict((k, v) for k, v in neg_evs_dict_xy.items() if len(v) > 1) 
+                        x = np.arange(self.W//4)
+                        y = np.arange(self.H//4)
+                        no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
+                        no_evs_set = set(map(tuple, no_evs_pixels))
+                        evs_set = set(evs_dict_xy.keys())
+                        no_evs_set -= evs_set
+                        no_evs_pixels = np.array(list(no_evs_set))
+                    
                     for cam_iter in range(self.num_cam_iters):
                         self.visualizer.vis(
                             idx, cam_iter, gt_depth, gt_color, camera_tensor, self.c, self.decoders)
@@ -575,7 +626,13 @@ class Tracker(object):
                         camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
                         loss_rgbd  = self.optimize_cam_rgbd(camera_tensor, gt_color, gt_depth, self.tracking_pixels,
                                                                 self.optim_quats_init, self.optim_trans_init)
-                            
+                        # if ev_nerf_loss_backward:
+                        #     loss_events = self.optimize_after_sampling_pixels(idx, pre_c2w, gt_c2w, camera_tensor,
+                        #                                               evs_dict_xy, pos_evs_dict_xy, neg_evs_dict_xy, no_evs_pixels,
+                        #                                               pre_gt_color,pre_gt_depth,
+                        #                                               gt_color, gt_depth, gt_event,
+                        #                                               self.optim_quats_init, self.optim_trans_init)
+                        # loss = loss_rgbd + loss_events
                         print(f"RGBD loss:{loss_rgbd}\n")
             
                         
@@ -643,6 +700,8 @@ class Tracker(object):
                 torch.cuda.empty_cache()
                 
             # store previous gt color
-            #if idx % self.every_frame == 0:
-            pre_gt_depth = gt_depth
-            pre_gt_color = gt_color
+            if idx % self.every_frame == 0:
+                pre_gt_depth = gt_depth
+                pre_gt_color = gt_color
+                # NOTE : dummyのevent
+                gt_event_integrate = torch.tensor([1000, 1000, 0, 0]).unsqueeze(0).to(device)
