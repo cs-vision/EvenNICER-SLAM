@@ -678,26 +678,7 @@ class Replica_event_txt(Replica):
         neg_evs_dict_xy = {}
         evs_dict_xy = {}
         
-        events_in = event_data.numpy()
-        for ev in events_in:
-            key_xy = (ev[0], ev[1])
-            if key_xy in evs_dict_xy.keys():
-                evs_dict_xy[key_xy].append(ev.tolist())
-            else:
-                evs_dict_xy[key_xy] = [ev.tolist()]
-            polarity = ev[3]
-            if polarity == 1.0 and key_xy in pos_evs_dict_xy.keys():
-                pos_evs_dict_xy[key_xy].append(ev.tolist())
-            elif polarity == -1.0 and key_xy in neg_evs_dict_xy.keys():
-                neg_evs_dict_xy[key_xy].append(ev.tolist())
-            elif polarity == 1.0:
-                pos_evs_dict_xy[key_xy] = [ev.tolist()]
-            elif polarity == -1.0:
-                neg_evs_dict_xy[key_xy] = [ev.tolist()]
-        evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
-        pos_evs_dict_xy = dict((k, v) for k, v in pos_evs_dict_xy.items() if len(v) > 1) 
-        neg_evs_dict_xy = dict((k, v) for k, v in neg_evs_dict_xy.items() if len(v) > 1) 
-        return index, color_data.to(self.device), depth_data.to(self.device), event_data.to(self.device), pose.to(self.device), evs_dict_xy, pos_evs_dict_xy, neg_evs_dict_xy#.to(self.device)
+        return index, color_data.to(self.device), depth_data.to(self.device), event_data.to(self.device), pose.to(self.device)
 
 
 dataset_dict = {

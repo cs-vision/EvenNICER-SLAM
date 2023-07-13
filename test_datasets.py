@@ -18,7 +18,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
 from src import config
-from src.EvenNICER_SLAM import EvenNICER_SLAM
+#from src.EvenNICER_SLAM import EvenNICER_SLAM
 import time
 
 def rgb_to_luma(rgb, esim=True):
@@ -148,57 +148,64 @@ def main():
 
     # TODO : change frame_loader() and remove gt_mask
     # TODO : framewise → asynchronous
-    for idx, gt_color, gt_depth, gt_event, gt_c2w, evs_dict_xy, pos_evs_dict_xy, neg_evs_dict_xy in pbar:
-      idx = idx[0]
-      gt_depth = gt_depth[0]
-      gt_color = gt_color[0]
-      gt_event = gt_event[0]
-      gt_c2w = gt_c2w[0]
+    for idx, gt_color, gt_depth, gt_event, gt_c2w, _, _, _ in pbar:
+        idx = idx[0]
+        gt_depth = gt_depth[0]
+        gt_color = gt_color[0]
+        gt_event = gt_event[0]
+        gt_c2w = gt_c2w[0]
 
-      x = np.arange(300) # W
-      y = np.arange(170) # H
-      no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
-      gt_event_array = gt_event.cpu().numpy()
-      
-      if idx == 1:
-          noevs_first_time = [(idx - 1) / 120]*5
-          #noevs_last_time = [torch.tensor((idx/(24*5)), dtype=torch.float64) for _ in range(5)]
-          noevs_last_time = [idx / 120]*5
-          xys_mtNevs = list(evs_dict_xy.keys())
-          sampled_xys = random.sample(xys_mtNevs, k=5)
-          events_first_time = []
-          events_last_time = []
-          first_events_polarity = []
-          evs_set = set(evs_dict_xy.keys())
-          x = np.arange(300)
-          y = np.arange(170)
-          no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
-          no_evs_set = set(map(tuple, no_evs_pixels))
-          print(len(no_evs_set))
-          no_evs_set -= evs_set
-          print(len(no_evs_set))
-          no_evs_pixels = np.array(list(no_evs_set))
-          print(no_evs_pixels.shape)
-          for xy in sampled_xys:
-              events_time_stamps = []
-              events_time_stamps.append([item[2] for item in evs_dict_xy[xy]])
-              events_first_time.append(events_time_stamps[0][0][0])
-              events_last_time.append(events_time_stamps[0][-1][0])
+        x = np.arange(300) # W
+        y = np.arange(170) # H
+        no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
+        gt_event_array = gt_event.cpu().numpy()
+        #print(gt_event_array)
+        pos_evs_dict_xy = {}
+        neg_evs_dict_xy = {}
+        evs_dict_xy = {}
+        for ev in gt_event_array:
+            key_xy = (ev[0], ev[1])
+            polarity = ev[3]
+            if key_xy in evs_dict_xy.keys():
+                evs_dict_xy[key_xy].append(ev.tolist())
+            else:
+                evs_dict_xy[key_xy] = [ev.tolist()]
+            if polarity == 1.0 and key_xy in pos_evs_dict_xy.keys():
+                pos_evs_dict_xy[key_xy].append(ev.tolist())
+            elif polarity == -1.0 and key_xy in neg_evs_dict_xy.keys():
+                neg_evs_dict_xy[key_xy].append(ev.tolist())
+            elif polarity == 1.0:
+                pos_evs_dict_xy[key_xy] = [ev.tolist()]
+            elif polarity == -1.0:
+                neg_evs_dict_xy[key_xy] = [ev.tolist()]
 
-              events_polarities = []
-              events_polarities.append([item[3] for item in evs_dict_xy[xy]])
-              first_events_polarity.append(events_polarities[0][0][0])
-
-              #print(evs_dict_xy[xy])
-              #print(evs_dict_xy[xy][:, 2])
-              #events_time_stamps.append(evs_dict_xy[xy][:, 2])
-          print(events_first_time)
-          print(noevs_first_time)
-          print(noevs_last_time)
-          print(np.array(first_events_polarity))
-          #print(noevs_first_time + events_first_time)
-          break
-          
+        evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
+        pos_evs_dict_xy = dict((k, v) for k, v in pos_evs_dict_xy.items() if len(v) > 1) 
+        neg_evs_dict_xy = dict((k, v) for k, v in neg_evs_dict_xy.items() if len(v) > 1) 
+        if idx == 1:
+            #rint(evs_dict_xy)
+            N_evs = 1
+            xys_mtNevs = list(evs_dict_xy.keys())
+            sampled_xys = random.sample(xys_mtNevs, k=N_evs)
+            num_pos_evs_at_xy = np.asarray([len(pos_evs_dict_xy.get(xy, [])) for xy in sampled_xys])
+            num_neg_evs_at_xy = np.asarray([len(neg_evs_dict_xy.get(xy, [])) for xy in sampled_xys])
+            
+            sampled_tensor = torch.tensor(sampled_xys).view(N_evs, -1)
+            i_tensor = sampled_tensor[:, 0].long()
+            j_tensor = sampled_tensor[:, 1].long()
+            events_first_time = []
+            events_last_time = []
+            first_events_polarity = []
+            for xy in sampled_xys:
+                    print(xy)
+                    events_time_stamps = []
+                    events_time_stamps.append([item[2] for item in evs_dict_xy[xy]])
+                    print(events_time_stamps)
+                    events_first_time.append(events_time_stamps[0][0])
+                   
+                    events_last_time.append(events_time_stamps[0][-1])
+            break
+        
 
     
           
