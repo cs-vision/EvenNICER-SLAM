@@ -98,8 +98,6 @@ class Tracker(object):
     def init_posenet_train(self, scale=1):
         self.optim_trans_init = torch.optim.Adam([dict(params=self.transNet.parameters(), lr = self.cam_lr*1*scale)])
         self.optim_quats_init = torch.optim.Adam([dict(params=self.quatsNet.parameters() , lr = self.cam_lr*0.2*scale)])
-        self.optim_trans_init.zero_grad()
-        self.optim_quats_init.zero_grad()
 
     def rgb_to_luma(self, rgb, esim=True):
         """
@@ -389,7 +387,7 @@ class Tracker(object):
             pbar = self.frame_loader
         else:
             pbar = tqdm(self.frame_loader)
-        self.init_posenet_train(0.1)
+        #self.init_posenet_train(0.1)
         for idx, gt_color, gt_depth, gt_event, gt_c2w  in pbar:
             if not self.verbose:
                 pbar.set_description(f"Tracking Frame {idx[0]}")
@@ -457,7 +455,7 @@ class Tracker(object):
                 current_min_loss = 10000000000.
                 current_min_loss_events = 10000000000.
                 
-                ev_nerf_loss_backward = True
+                ev_nerf_loss_backward = False
                 if ev_nerf_loss_backward:
                     events_in = gt_event_integrate.cpu().numpy()
                     pos_evs_dict_xy = {}
