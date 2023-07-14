@@ -25,18 +25,20 @@ esim.setParameters(contrast_threshold_pos, contrast_threshold_neg, refractory_pe
 places = [
         #  'office0',
         #   'office0_dense9995',→ what are these data?
-          'office1',
-          'office2',
-          'office3',
-          'office4',
+          #'office1',
+          #'office2',
+          #'office3',
+          #'office4',
           'room0',
-          'room1',
-          'room2'
+          #'room1',
+          #'room2'
         ]
 
 input_dir = '/scratch_net/biwidl215/myamaguchi/rpg_vid2e-master/data/Replica'
 
 output_folder = '/scratch_net/biwidl215/myamaguchi/rpg_vid2e-master/output'
+
+
 
 for place in places:
     list_of_image_files = sorted(glob.glob(f'{input_dir}/{place}/results/frame*.jpg'))
@@ -48,11 +50,11 @@ for place in places:
         new_height = image.shape[0] // 4
         downscaled_image = cv2.resize(image, (new_width, new_height))
         output_file = image_file.replace('.jpg', f'_downsampled.jpg')
-        cv2.imwrite(output_file, downscaled_image)
-        list_of_downscaled_images.append(output_file)
+        #cv2.imwrite(output_file, downscaled_image)
+        #list_of_downscaled_images.append(output_file)
 
 
-    n_frames = len(list_of_downscaled_images)
+    n_frames = len(list_of_image_files)
     print('starting to process', place, 'with', n_frames, 'frames...\n')
 
     fps = 24 * 5 
@@ -76,7 +78,8 @@ for place in places:
     for i in range(n_frames-1):
         txt_filename = place + '_' + 'events' + str(i).zfill(6) + '_' + str(i+1).zfill(6) + '.txt'
         events_list_of_images = esim.generateFromStampedImageSequence(
-            list_of_downscaled_images[i : i+2],   # list of absolute paths to images   
+            list_of_image_files[i : i + 2],
+            #list_of_downscaled_images[i : i+2],   # list of absolute paths to images   
             list_of_timestamps + interval*i             # list of timestamps in ascending order
         ) # each event: [x, y, t, polarity]
           # print(type(events_list_of_images)): numpy.ndarray
@@ -87,7 +90,7 @@ for place in places:
                 f.write(line + '\n')
         # timestamp, x, y, polarity
 
-    list_of_downsampled_files = glob.glob("/scratch_net/biwidl215/myamaguchi/rpg_vid2e-master/data/Replica/office0/results/*_downsampled.jpg")
+    list_of_downsampled_files = glob.glob("/scratch_net/biwidl215/myamaguchi/rpg_vid2e-master/data/Replica/room0/results/*_downsampled.jpg")
     for file in list_of_downsampled_files:
         os.remove(file)
 
