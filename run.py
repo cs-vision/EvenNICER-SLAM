@@ -6,7 +6,7 @@ import torch
 
 from src import config
 from src.EvenNICER_SLAM import EvenNICER_SLAM
-from src.NICE_SLAM import NICE_SLAM
+#from src.NICE_SLAM import NICE_SLAM
 
 
 def setup_seed(seed):

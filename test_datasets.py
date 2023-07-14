@@ -148,7 +148,7 @@ def main():
 
     # TODO : change frame_loader() and remove gt_mask
     # TODO : framewise → asynchronous
-    for idx, gt_color, gt_depth, gt_event, gt_c2w, _, _, _ in pbar:
+    for idx, gt_color, gt_depth, gt_event, gt_c2w in pbar:
         idx = idx[0]
         gt_depth = gt_depth[0]
         gt_color = gt_color[0]
@@ -182,6 +182,26 @@ def main():
         evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
         pos_evs_dict_xy = dict((k, v) for k, v in pos_evs_dict_xy.items() if len(v) > 1) 
         neg_evs_dict_xy = dict((k, v) for k, v in neg_evs_dict_xy.items() if len(v) > 1) 
+        xys_mtNevs_list = list(evs_dict_xy.keys())
+        
+        if idx == 1:
+            #sampled_xys = random.sample(xys_mtNevs, k=5)
+            xys_mtNevs = np.array(xys_mtNevs_list)
+            condition = xys_mtNevs[:, 0] < 100
+            indices = np.where(condition)[0]
+            selected_indices = np.random.choice(indices, size=5, replace=False)
+            print(selected_indices)
+            #print(xys_mtNevs_list)
+            sampled_xys = xys_mtNevs[selected_indices]
+            print(sampled_xys)
+            result = [tuple(row) for row in sampled_xys]
+            # for xy in sampled_xys:
+            #     print(xy)
+            num_pos_evs_at_xy = np.asarray([len(pos_evs_dict_xy.get(xy, [])) for xy in result])
+            #print(sampled_evs_xys)
+            print(num_pos_evs_at_xy)
+
+            break
         if idx == 1:
             #rint(evs_dict_xy)
             N_evs = 1
