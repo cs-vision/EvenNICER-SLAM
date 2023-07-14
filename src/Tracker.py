@@ -244,14 +244,14 @@ class Tracker(object):
             events_polarities.append([item[3] for item in evs_dict_xy[xy]])
             first_events_polarity.append(events_polarities[0][0])
 
-        evs_at_xy = num_pos_evs_at_xy*0.1 - num_neg_evs_at_xy*0.1 - np.array(first_events_polarity)*0.1
+        evs_at_xy = num_pos_evs_at_xy*0.1 - num_neg_evs_at_xy*0.1 #- np.array(first_events_polarity)*0.1
         evs_at_xy = torch.tensor(evs_at_xy).unsqueeze(1).to(device)
 
         events_first_time = torch.tensor(events_first_time, dtype=torch.float32).reshape(N_evs, -1).to(device)
         events_last_time = torch.tensor(events_last_time, dtype=torch.float32).reshape(N_evs, -1).to(device)
 
         # NOTE : las_time(semi-asynchronous)
-        ray_o, ray_d = self.get_event_rays(i_tensor, j_tensor, events_last_time, pre_c2w, H, W, fx, fy, cx, cy, device)
+        #ray_o, ray_d = self.get_event_rays(i_tensor, j_tensor, events_last_time, pre_c2w, H, W, fx, fy, cx, cy, device)
         # NOTE : c2w
         ray_o, ray_d = get_rays_from_uv(i_tensor, j_tensor, c2w, H, W, fx, fy, cx, cy, device)
 
@@ -387,7 +387,12 @@ class Tracker(object):
             pbar = self.frame_loader
         else:
             pbar = tqdm(self.frame_loader)
-        #self.init_posenet_train(0.1)
+
+        ev_nerf_loss_backward = False
+        if ev_nerf_loss_backward:
+            self.init_posenet_train(0.1)
+            self.optim_quats_init.zero_grad()
+            self.optim_trans_init.zero_grad()
         for idx, gt_color, gt_depth, gt_event, gt_c2w  in pbar:
             if not self.verbose:
                 pbar.set_description(f"Tracking Frame {idx[0]}")
@@ -426,8 +431,8 @@ class Tracker(object):
                 if not self.no_vis_on_first_frame:
                     self.visualizer.vis(
                         idx, 0, gt_depth, gt_color, c2w, self.c, self.decoders)
-
-            elif idx % 5 ==0:
+            
+            else:
                 gt_camera_tensor = get_tensor_from_camera(gt_c2w)
                 if self.const_speed_assumption and idx-2 >= 0:
                     pre_c2w = pre_c2w.float()
@@ -450,13 +455,13 @@ class Tracker(object):
 
 
                 initial_loss_camera_tensor = torch.abs(
-                    gt_camera_tensor.to(device)- camera_tensor).mean().item()
+                    gt_camera_tensor.to(device)-camera_tensor).mean().item()
                 candidate_cam_tensor = None
                 current_min_loss = 10000000000.
                 current_min_loss_events = 10000000000.
-                
-                ev_nerf_loss_backward = False
-                if ev_nerf_loss_backward:
+                # NOTE : accumulate event 
+                gt_event_integrate = torch.cat((gt_event_integrate, gt_event), dim = 0)
+                if ev_nerf_loss_backward and idx % 5 == 0:
                     events_in = gt_event_integrate.cpu().numpy()
                     pos_evs_dict_xy = {}
                     neg_evs_dict_xy = {}
@@ -562,7 +567,7 @@ class Tracker(object):
                         del candidate_quatsNet_para       
 
                 rgbd_loss_backward = True
-                if rgbd_loss_backward:
+                if rgbd_loss_backward and idx % 5 == 0:
                     for cam_iter in range(self.num_cam_iters):
                         self.visualizer.vis(
                             idx, cam_iter, gt_depth, gt_color, camera_tensor, self.c, self.decoders)
@@ -652,5 +657,3 @@ class Tracker(object):
                 pre_gt_color = gt_color
                 # NOTE : insert dummy event
                 gt_event_integrate = torch.tensor([1000, 1000, 0, 0]).unsqueeze(0).to(device)
-            else:
-                gt_event_integrate = torch.cat((gt_event_integrate, gt_event), dim = 0)
