@@ -388,7 +388,7 @@ class Tracker(object):
         else:
             pbar = tqdm(self.frame_loader)
 
-        ev_nerf_loss_backward = False
+        ev_nerf_loss_backward = True
         if ev_nerf_loss_backward:
             self.init_posenet_train(0.1)
             self.optim_quats_init.zero_grad()
