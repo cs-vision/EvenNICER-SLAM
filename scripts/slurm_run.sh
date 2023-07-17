@@ -22,7 +22,7 @@ dataset=${datasets[0]}
 scene_name="room0"
 
 # Edit this to distinguish different configs
-run_suffix="gap5_blur9"
+run_suffix="frame_wise_PoseNet"
 
 # Run single or array job
 if [ -z "$SLURM_ARRAY_TASK_ID" ]; then

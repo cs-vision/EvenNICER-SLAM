@@ -387,7 +387,7 @@ class Tracker(object):
                 current_min_loss_event = 10000000000.
 
                 # NOTE : add up gt_event_integrate asap
-                #gt_event_integrate += gt_event
+                gt_event_integrate += gt_event
 
                 for cam_iter in range(self.num_cam_iters):
                     if self.seperate_LR:
@@ -495,5 +495,3 @@ class Tracker(object):
                 self.gt_event_integrate = gt_event_integrate.clone() 
                 print("integrated GT events updated!")
                 gt_event_integrate = torch.zeros_like(gt_event)
-            else:
-                gt_event_integrate += gt_event

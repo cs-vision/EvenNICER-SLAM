@@ -184,11 +184,11 @@ class Tracker(object):
         batch_pre_gt_gray = self.rgb_to_luma(batch_pre_gt_color, esim=True)
         batch_pre_gt_loggray = self.lin_log(batch_pre_gt_gray*255, linlog_thres=20)
 
-        gt_pos = torch.unsqueeze(batch_gt_event[:, 0] , dim = 1)
-        gt_neg = torch.unsqueeze(batch_gt_event[:, 1] , dim = 1)
+        gt_pos = torch.unsqueeze(batch_gt_event[:, 1] , dim = 1)
+        gt_neg = torch.unsqueeze(batch_gt_event[:, 0] , dim = 1)
 
         C_thres = 0.1
-        batch_gt_loggray_events = batch_pre_gt_loggray -  gt_pos * C_thres + gt_neg * C_thres
+        batch_gt_loggray_events = batch_pre_gt_loggray +  gt_pos * C_thres - gt_neg * C_thres
         batch_gt_inverse_loggray = self.inverse_lin_log(batch_gt_loggray_events)
 
         loss_event = torch.abs(batch_gt_inverse_loggray - rendered_gray*255).sum()
@@ -201,7 +201,6 @@ class Tracker(object):
             loss_event.backward(retain_graph = False)
         loss_event_item = loss_event.item()
    
-
         if rgbd:
             # should pre-filter those out of bounding box depth value
             batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color = get_samples(
@@ -295,6 +294,8 @@ class Tracker(object):
             gt_depth = gt_depth[0]
             gt_color = gt_color[0]
             gt_event = gt_event[0]
+            if idx != 0:
+                gt_event_integrate += gt_event
             gt_c2w = gt_c2w[0]
 
             if self.sync_method == 'strict':
@@ -377,7 +378,7 @@ class Tracker(object):
                                                                            self.optim_quats_init, self.optim_trans_init,
                                                                            pre_gt_color, 
                                                                            #pre_gt_depth,
-                                                                           rgbd=False)
+                                                                           rgbd=True)
                     else:
                         loss_rgbd, loss_event = self.optimize_cam_in_batch(camera_tensor, gt_color, gt_depth, gt_event_integrate, self.tracking_pixels,
                                                                             self.optim_quats_init, self.optim_trans_init,
@@ -394,6 +395,11 @@ class Tracker(object):
 
                     loss_camera_tensor = torch.abs(
                         gt_camera_tensor.to(device)-camera_tensor.to(device)).mean().item()
+                    
+                    fixed_camera_tensor = camera_tensor.clone().detach()
+                    if camera_tensor[0] < 0:
+                        fixed_camera_tensor[:4] *= -1
+                    fixed_camera_error = torch.abs(gt_camera_tensor.to(device)- fixed_camera_tensor).mean().item()
                     
                     print("Camera tensor error", loss_camera_tensor)
                     
@@ -413,6 +419,7 @@ class Tracker(object):
                                     'Event loss improvement': initial_loss_event - loss_event,
                                     'Camera error': loss_camera_tensor,
                                     'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
+                                    'Fixed camera error' : fixed_camera_error,
                                     'Frame': idx,
                                     'first element of quaternion': camera_tensor[0],
                                     'first element of GT quaternion' : gt_camera_tensor[0],
@@ -474,5 +481,3 @@ class Tracker(object):
                 self.gt_event_integrate = gt_event_integrate.clone() 
                 print("integrated GT events updated!")
                 gt_event_integrate = torch.zeros_like(gt_event)
-            else:
-                gt_event_integrate += gt_event
