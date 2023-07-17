@@ -218,7 +218,7 @@ class Tracker(object):
         print(loss_events.item())
     
         # NOTE : active sampling
-        N_evs = 200
+        N_evs = 10
         xys_mtNevs = np.array(list(evs_dict_xy.keys()))
         condition = (W//4 < xys_mtNevs[:, 0]) & (xys_mtNevs[:, 0] < W - W//4) & (H//4 < xys_mtNevs[:, 1]) & (xys_mtNevs[:, 1] < H - H//4)
         indices = np.where(condition)[0]
@@ -276,11 +276,11 @@ class Tracker(object):
         #loss_events.backward()
 
         loss_events = loss_events*0.025
-        loss_events.backward()
-        optim_quats_init.step()
-        optim_trans_init.step()
-        optim_quats_init.zero_grad()
-        optim_trans_init.zero_grad()
+        loss_events.backward(retain_graph = True)
+        # optim_quats_init.step()
+        # optim_trans_init.step()
+        # optim_quats_init.zero_grad()
+        # optim_trans_init.zero_grad()
 
         return loss_events.item()
 
@@ -340,10 +340,10 @@ class Tracker(object):
 
         loss_rgbd.backward()   
 
-        optim_quats_init.step()
-        optim_trans_init.step()
-        optim_quats_init.zero_grad()
-        optim_trans_init.zero_grad()
+        # optim_quats_init.step()
+        # optim_trans_init.step()
+        # optim_quats_init.zero_grad()
+        # optim_trans_init.zero_grad()
 
         return loss_rgbd.item()
 
@@ -388,11 +388,11 @@ class Tracker(object):
         else:
             pbar = tqdm(self.frame_loader)
 
-        ev_nerf_loss_backward = False
-        if ev_nerf_loss_backward:
-            self.init_posenet_train(0.1)
-            self.optim_quats_init.zero_grad()
-            self.optim_trans_init.zero_grad()
+        # ev_nerf_loss_backward = False
+        # if ev_nerf_loss_backward:
+        #     self.init_posenet_train(0.1)
+        #     self.optim_quats_init.zero_grad()
+        #     self.optim_trans_init.zero_grad()
         for idx, gt_color, gt_depth, gt_event, gt_c2w  in pbar:
             if not self.verbose:
                 pbar.set_description(f"Tracking Frame {idx[0]}")
@@ -461,7 +461,7 @@ class Tracker(object):
                 current_min_loss_events = 10000000000.
                 # NOTE : accumulate event 
                 gt_event_integrate = torch.cat((gt_event_integrate, gt_event), dim = 0)
-                if ev_nerf_loss_backward and idx % 5 == 0:
+                if idx % 5 == 0:
                     events_in = gt_event_integrate.cpu().numpy()
                     pos_evs_dict_xy = {}
                     neg_evs_dict_xy = {}
@@ -485,8 +485,8 @@ class Tracker(object):
                     evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
                     pos_evs_dict_xy = dict((k, v) for k, v in pos_evs_dict_xy.items() if len(v) > 1) 
                     neg_evs_dict_xy = dict((k, v) for k, v in neg_evs_dict_xy.items() if len(v) > 1) 
-                    x = np.arange(self.W//4)
-                    y = np.arange(self.H//4)
+                    x = np.arange(self.W)
+                    y = np.arange(self.H)
                     no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
                     no_evs_set = set(map(tuple, no_evs_pixels))
                     evs_set = set(evs_dict_xy.keys())
@@ -508,7 +508,18 @@ class Tracker(object):
                                                                       pre_gt_color,pre_gt_depth,
                                                                       gt_color, gt_depth, gt_event,
                                                                       self.optim_quats_init, self.optim_trans_init)
+
+                        loss_rgbd  = self.optimize_cam_rgbd(camera_tensor, gt_color, gt_depth, self.tracking_pixels,
+                                                                self.optim_quats_init, self.optim_trans_init)
+                        
+                        self.optim_quats_init.step()
+                        self.optim_trans_init.step()
+                        self.optim_quats_init.zero_grad()
+                        self.optim_trans_init.zero_grad()
+                        
                         print("Event Loss", loss_events)
+                        print(f"RGBD loss:{loss_rgbd}\n")
+
                         c2w = get_camera_from_tensor(camera_tensor)
                         loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)-camera_tensor).mean().item()
 
@@ -539,8 +550,15 @@ class Tracker(object):
 
                                     self.experiment.log(dict_log)
 
-                        if loss_events < current_min_loss_events:
-                            current_min_loss_events = loss_events
+                        # if loss_events < current_min_loss_events:
+                        #     current_min_loss_events = loss_events
+                        #     candidate_cam_tensor = camera_tensor.clone().detach()
+                        #     if not self.use_last:
+                        #         candidate_transNet_para = self.transNet.state_dict()
+                        #         candidate_quatsNet_para = self.quatsNet.state_dict()
+
+                        if loss_rgbd < current_min_loss:
+                            current_min_loss = loss_rgbd
                             candidate_cam_tensor = camera_tensor.clone().detach()
                             if not self.use_last:
                                 candidate_transNet_para = self.transNet.state_dict()
@@ -566,7 +584,7 @@ class Tracker(object):
                         del candidate_transNet_para
                         del candidate_quatsNet_para       
 
-                rgbd_loss_backward = True
+                rgbd_loss_backward = False
                 if rgbd_loss_backward and idx % 5 == 0:
                     for cam_iter in range(self.num_cam_iters):
                         self.visualizer.vis(
