@@ -3,7 +3,7 @@
 #SBATCH  --error=/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/output/log/%j.out
 #SBATCH  --gres=gpu:1
 #SBATCH  --mem=40G
-#SBATCH  --constraint='titan_xp'
+#SBATCH  --constraint='geforce_gtx_titan_x'
 
 JOB_START_TIME=$(date)
 echo "SLURM_JOB_ID:    ${SLURM_JOB_ID}" 
