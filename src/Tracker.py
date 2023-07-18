@@ -182,7 +182,7 @@ class Tracker(object):
                                        gt_color, gt_depth, gt_event,
                                        optim_quats_init, optim_trans_init):
         device = self.device
-        H, W, fx, fy, cx, cy = self.H// 4, self.W//4, self.fx//4, self.fy//4, self.cx//4, self.cy//4
+        H, W, fx, fy, cx, cy = self.H, self.W, self.fx, self.fy, self.cx, self.cy
         
         optim_quats_init.zero_grad()
         optim_trans_init.zero_grad()
