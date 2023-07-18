@@ -3,7 +3,7 @@
 #SBATCH  --error=/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/output/log/%j.out
 #SBATCH  --gres=gpu:1
 #SBATCH  --mem=40G
-#SBATCH  --constraint='titan_xp'
+#SBATCH  --constraint='geforce_gtx_titan_x'
 
 JOB_START_TIME=$(date)
 echo "SLURM_JOB_ID:    ${SLURM_JOB_ID}" 
@@ -22,7 +22,7 @@ dataset=${datasets[0]}
 scene_name="room0"
 
 # Edit this to distinguish different configs
-run_suffix="200_0_lr*=0.1_without_downscaling"
+run_suffix="200_100_without_downscaling"
 
 # Run single or array job
 if [ -z "$SLURM_ARRAY_TASK_ID" ]; then

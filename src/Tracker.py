@@ -218,7 +218,7 @@ class Tracker(object):
         print(loss_events.item())
     
         # NOTE : active sampling
-        N_evs = 10
+        N_evs = 100
         xys_mtNevs = np.array(list(evs_dict_xy.keys()))
         condition = (W//4 < xys_mtNevs[:, 0]) & (xys_mtNevs[:, 0] < W - W//4) & (H//4 < xys_mtNevs[:, 1]) & (xys_mtNevs[:, 1] < H - H//4)
         indices = np.where(condition)[0]
@@ -264,7 +264,7 @@ class Tracker(object):
         pre_log_gray = self.lin_log(pre_gray*255)
         expected_gray = self.inverse_lin_log(pre_log_gray + evs_at_xy)
         
-        active_sampling  = False
+        active_sampling  = True
         if active_sampling:
             loss_events += torch.abs(expected_gray - rendered_gray*255).sum()
         print(loss_events.item())
