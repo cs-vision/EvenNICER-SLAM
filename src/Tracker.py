@@ -95,7 +95,7 @@ class Tracker(object):
         self.fps = 120
         self.use_last = False
 
-    def init_posenet_train(self, scale=1):
+    def init_posenet_train(self, scale=0.6):
         self.optim_trans_init = torch.optim.Adam([dict(params=self.transNet.parameters(), lr = self.cam_lr*1*scale)])
         self.optim_quats_init = torch.optim.Adam([dict(params=self.quatsNet.parameters() , lr = self.cam_lr*0.2*scale)])
 

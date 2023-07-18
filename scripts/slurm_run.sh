@@ -22,7 +22,7 @@ dataset=${datasets[0]}
 scene_name="room0"
 
 # Edit this to distinguish different configs
-run_suffix="200_100_without_downscaling"
+run_suffix="200_100_lr*=0.6"
 
 # Run single or array job
 if [ -z "$SLURM_ARRAY_TASK_ID" ]; then
