@@ -688,6 +688,7 @@ dataset_dict = {
     "azure": Azure,
     "tumrgbd": TUM_RGBD,
     "replica_event": Replica_event,
+    # NOTE: input events as .txt
     "replica_event_txt" : Replica_event_txt,
     "rpg": RPG,
     "rpg_event": RPG_event,

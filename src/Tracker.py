@@ -15,11 +15,12 @@ from src.common import (get_camera_from_tensor, get_samples,
                         get_tensor_from_camera, 
                         get_samples_event,
                         get_rays_from_uv,
+                        # NOTE: for PoseNet
                         quad2rotation,get_tensor_from_camera_in_pytorch)
 from src.utils.datasets import get_dataset
 from src.utils.Visualizer import Visualizer
 
-# PoseNet 
+# import PoseNet 
 from pose_net import transNet,quatsNet
 
 import random
@@ -193,7 +194,7 @@ class Tracker(object):
         gt_color = F.interpolate(gt_color.permute(2, 0, 1).unsqueeze(0), (H, W)).squeeze().permute(1, 2, 0)
         pre_gt_gray = self.rgb_to_luma(pre_gt_color)
 
-        # NOTE : negative sampling
+        # NOTE : nonevent sampling
         N_noevs = 200
         condition = (W//4 < no_evs_pixels[:, 0]) & (no_evs_pixels[:, 0] < W - W//4) & (H//4 < no_evs_pixels[:, 1]) & (no_evs_pixels[:, 1] < H - H//4)
         indices = np.where(condition)[0]
@@ -217,7 +218,7 @@ class Tracker(object):
         loss_events = torch.abs(noevs_gray*255 - noevs_pre_gray*255).sum()
         print(loss_events.item())
     
-        # NOTE : active sampling
+        # NOTE : events sampling
         N_evs = 100
         xys_mtNevs = np.array(list(evs_dict_xy.keys()))
         condition = (W//4 < xys_mtNevs[:, 0]) & (xys_mtNevs[:, 0] < W - W//4) & (H//4 < xys_mtNevs[:, 1]) & (xys_mtNevs[:, 1] < H - H//4)
@@ -437,7 +438,6 @@ class Tracker(object):
                     gt_camera_tensor.to(device)-camera_tensor).mean().item()
                 candidate_cam_tensor = None
                 current_min_loss = 10000000000.
-                current_min_loss_events = 10000000000.
                 # NOTE : accumulate event 
                 gt_event_integrate = torch.cat((gt_event_integrate, gt_event), dim = 0)
                 if idx % 5 == 0:
@@ -470,6 +470,7 @@ class Tracker(object):
                     no_evs_set = set(map(tuple, no_evs_pixels))
                     evs_set = set(evs_dict_xy.keys())
                     no_evs_set -= evs_set
+                    # NOTE: sampling nonevent pixels 
                     no_evs_pixels = np.array(list(no_evs_set))
                 
                     for cam_iter in range(self.num_cam_iters):
@@ -516,10 +517,8 @@ class Tracker(object):
                                     # wandb logging
                                     dict_log = {
                                         'Event loss' : loss_events,
-                                        #'Event loss improvement': initial_loss_event - loss_event,
                                         'Camera error': loss_camera_tensor,
                                         'Fixed camera error' : fixed_camera_error,
-                                        #'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
                                         'Frame': idx,
                                         'first element of gt quaternion' : gt_camera_tensor[0],
                                         'first element of quaternion' : camera_tensor[0],
@@ -529,12 +528,6 @@ class Tracker(object):
 
                                     self.experiment.log(dict_log)
 
-                        # if loss_events < current_min_loss_events:
-                        #     current_min_loss_events = loss_events
-                        #     candidate_cam_tensor = camera_tensor.clone().detach()
-                        #     if not self.use_last:
-                        #         candidate_transNet_para = self.transNet.state_dict()
-                        #         candidate_quatsNet_para = self.quatsNet.state_dict()
 
                         if loss_rgbd < current_min_loss:
                             current_min_loss = loss_rgbd
@@ -583,6 +576,7 @@ class Tracker(object):
                         loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)-camera_tensor).mean().item()
                         print(f"camera tensor error: {loss_camera_tensor}\n")
 
+                        # NOTE : to handle minus quaternion
                         fixed_camera_tensor = camera_tensor.clone().detach()
                         if camera_tensor[0] < 0:
                             fixed_camera_tensor[:4] *= -1
@@ -593,7 +587,6 @@ class Tracker(object):
                         
                         if self.verbose:
                             if cam_iter == self.num_cam_iters-1:
-                                    # if rgbd_available:
                                     print(
                                         f'RGBD loss: {initial_loss_rgbd:.2f}->{loss_rgbd:.2f} ' +
                                         f'camera tensor error: {initial_loss_camera_tensor:.4f}->{loss_camera_tensor:.4f}')
