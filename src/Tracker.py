@@ -252,9 +252,9 @@ class Tracker(object):
         events_last_time = torch.tensor(events_last_time, dtype=torch.float32).reshape(N_evs, -1).to(device)
 
         # NOTE : las_time(semi-asynchronous)
-        ray_o, ray_d = self.get_event_rays(i_tensor, j_tensor, events_last_time, pre_c2w, H, W, fx, fy, cx, cy, device)
+        #ray_o, ray_d = self.get_event_rays(i_tensor, j_tensor, events_last_time, pre_c2w, H, W, fx, fy, cx, cy, device)
         # NOTE : c2w
-        #ray_o, ray_d = get_rays_from_uv(i_tensor, j_tensor, c2w, H, W, fx, fy, cx, cy, device)
+        ray_o, ray_d = get_rays_from_uv(i_tensor, j_tensor, c2w, H, W, fx, fy, cx, cy, device)
 
         evs_gt_depth = gt_depth[j_tensor, i_tensor]
         ret = self.renderer.render_batch_ray(self.c, self.decoders, ray_d, ray_o, device, stage='color', gt_depth=evs_gt_depth)
@@ -555,84 +555,6 @@ class Tracker(object):
 
                         del candidate_transNet_para
                         del candidate_quatsNet_para       
-
-                rgbd_loss_backward = False
-                if rgbd_loss_backward and idx % 5 == 0:
-                    for cam_iter in range(self.num_cam_iters):
-                        self.visualizer.vis(
-                            idx, cam_iter, gt_depth, gt_color, camera_tensor, self.c, self.decoders)
-
-                        estimated_correct_cam_trans = self.transNet.forward(idx_tensor).unsqueeze(0)
-                        estimated_new_cam_quad = self.quatsNet.forward(idx_tensor).unsqueeze(0)
-                        estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad)
-                        estimated_correct_new_cam_c2w = torch.concat([estimated_correct_cam_rots, estimated_correct_cam_trans[...,None] ],dim=-1).squeeze()
-                        bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape([1, 4])).type(torch.float32).to(device)
-                        estimated_correct_new_cam_c2w_homogeneous= torch.cat([estimated_correct_new_cam_c2w, bottom], dim=0)
-                        compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
-                        camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
-                        loss_rgbd  = self.optimize_cam_rgbd(camera_tensor, gt_color, gt_depth, self.tracking_pixels,
-                                                                self.optim_quats_init, self.optim_trans_init)
-                        print(f"RGBD loss:{loss_rgbd}\n")
-                        loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)-camera_tensor).mean().item()
-                        print(f"camera tensor error: {loss_camera_tensor}\n")
-
-                        # NOTE : to handle minus quaternion
-                        fixed_camera_tensor = camera_tensor.clone().detach()
-                        if camera_tensor[0] < 0:
-                            fixed_camera_tensor[:4] *= -1
-                        fixed_camera_error = torch.abs(gt_camera_tensor.to(device)- fixed_camera_tensor).mean().item()
-
-                        if cam_iter == 0:
-                            initial_loss_rgbd = loss_rgbd
-                        
-                        if self.verbose:
-                            if cam_iter == self.num_cam_iters-1:
-                                    print(
-                                        f'RGBD loss: {initial_loss_rgbd:.2f}->{loss_rgbd:.2f} ' +
-                                        f'camera tensor error: {initial_loss_camera_tensor:.4f}->{loss_camera_tensor:.4f}')
-                                    
-                                    # wandb logging
-                                    dict_log = {
-                                        'RGBD loss' : loss_rgbd,
-                                        'RGBD loss improvement': initial_loss_rgbd - loss_rgbd,
-                                        'Camera error': loss_camera_tensor,
-                                        'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
-                                        'Fixed camera error' : fixed_camera_error,
-                                        'Frame': idx,
-                                        'first element of gt quaternion' : gt_camera_tensor[0],
-                                        'first element of quaternion' : camera_tensor[0],
-                                        'first element of translation' : camera_tensor[4],
-                                        'first element of gt translation' : gt_camera_tensor[4]
-                                    }
-
-                                    self.experiment.log(dict_log)
-
-                        if loss_rgbd < current_min_loss:
-                            current_min_loss = loss_rgbd
-                            candidate_cam_tensor = camera_tensor.clone().detach()
-                            if not self.use_last:
-                                candidate_transNet_para = self.transNet.state_dict()
-                                candidate_quatsNet_para = self.quatsNet.state_dict()
-
-                    bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape(
-                            [1, 4])).type(torch.float32).to(self.device)
-                    print("candidate_cam_tensor:", candidate_cam_tensor)
-                    if self.use_last:
-                        c2w = get_camera_from_tensor(
-                            camera_tensor.clone().detach()
-                        )
-                        c2w = torch.cat([c2w, bottom], dim=0)
-                    else:
-                        c2w = get_camera_from_tensor(
-                            candidate_cam_tensor.clone().detach()
-                        )
-                        c2w = torch.cat([c2w, bottom], dim=0)   
-
-                        self.transNet.load_state_dict(candidate_transNet_para)
-                        self.quatsNet.load_state_dict(candidate_quatsNet_para)
-
-                        del candidate_transNet_para
-                        del candidate_quatsNet_para 
 
             self.estimate_c2w_list[idx] = c2w.clone().cpu()
             self.gt_c2w_list[idx] = gt_c2w.clone().cpu()
