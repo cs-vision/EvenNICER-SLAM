@@ -445,7 +445,7 @@ class Tracker(object):
                     evs_dict_xy = {}
 
                     # NOTE: get fixed_pre_log_gray
-                    idx_time = torch.full((self.H, self.W), (idx-1)/self.fps*100).to(self.device)
+                    idx_time = torch.full((self.H, self.W), (idx-5)/self.fps*100).to(self.device)
                     first_evs_time = torch.zeros(self.H, self.W).to(self.device)
                     last_evs_time = torch.full((self.H, self.W), idx/self.fps*100).to(self.device)
                     first_evs_pol = torch.zeros(self.H, self.W).to(self.device)

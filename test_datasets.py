@@ -160,7 +160,7 @@ def main():
         idx_time  = torch.full((680, 1200), (idx-1)/120*100).to("cuda:0")
         first_evs_time = torch.zeros(680, 1200).to("cuda:0")
         last_evs_time = torch.full((680, 1200), idx/120*100).to("cuda:0")
-        first_evs_pol = torch.zeros((680, 1200)).to("cuda:0")
+        first_evs_pol = torch.zeros(680, 1200).to("cuda:0")
 
         
 
