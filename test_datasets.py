@@ -155,76 +155,34 @@ def main():
         gt_event = gt_event[0]
         gt_c2w = gt_c2w[0]
 
-        x = np.arange(300) # W
-        y = np.arange(170) # H
-        no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
-        gt_event_array = gt_event.cpu().numpy()
-        #print(gt_event_array)
-        pos_evs_dict_xy = {}
-        neg_evs_dict_xy = {}
-        evs_dict_xy = {}
-        for ev in gt_event_array:
-            key_xy = (ev[0], ev[1])
-            polarity = ev[3]
-            if key_xy in evs_dict_xy.keys():
-                evs_dict_xy[key_xy].append(ev.tolist())
-            else:
-                evs_dict_xy[key_xy] = [ev.tolist()]
-            if polarity == 1.0 and key_xy in pos_evs_dict_xy.keys():
-                pos_evs_dict_xy[key_xy].append(ev.tolist())
-            elif polarity == -1.0 and key_xy in neg_evs_dict_xy.keys():
-                neg_evs_dict_xy[key_xy].append(ev.tolist())
-            elif polarity == 1.0:
-                pos_evs_dict_xy[key_xy] = [ev.tolist()]
-            elif polarity == -1.0:
-                neg_evs_dict_xy[key_xy] = [ev.tolist()]
+        events_in = gt_event.cpu().numpy()
 
-        evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
-        pos_evs_dict_xy = dict((k, v) for k, v in pos_evs_dict_xy.items() if len(v) > 1) 
-        neg_evs_dict_xy = dict((k, v) for k, v in neg_evs_dict_xy.items() if len(v) > 1) 
-        xys_mtNevs_list = list(evs_dict_xy.keys())
+        idx_time  = torch.full((680, 1200), (idx-1)/120*100).to("cuda:0")
+        first_evs_time = torch.zeros(680, 1200).to("cuda:0")
+        last_evs_time = torch.full((680, 1200), idx/120*100).to("cuda:0")
+        first_evs_pol = torch.zeros((680, 1200)).to("cuda:0")
+
         
-        if idx == 1:
-            #sampled_xys = random.sample(xys_mtNevs, k=5)
-            xys_mtNevs = np.array(xys_mtNevs_list)
-            condition = xys_mtNevs[:, 0] < 100
-            indices = np.where(condition)[0]
-            selected_indices = np.random.choice(indices, size=5, replace=False)
-            print(selected_indices)
-            #print(xys_mtNevs_list)
-            sampled_xys = xys_mtNevs[selected_indices]
-            print(sampled_xys)
-            result = [tuple(row) for row in sampled_xys]
-            # for xy in sampled_xys:
-            #     print(xy)
-            num_pos_evs_at_xy = np.asarray([len(pos_evs_dict_xy.get(xy, [])) for xy in result])
-            #print(sampled_evs_xys)
-            print(num_pos_evs_at_xy)
 
-            break
-        if idx == 1:
-            #rint(evs_dict_xy)
-            N_evs = 1
-            xys_mtNevs = list(evs_dict_xy.keys())
-            sampled_xys = random.sample(xys_mtNevs, k=N_evs)
-            num_pos_evs_at_xy = np.asarray([len(pos_evs_dict_xy.get(xy, [])) for xy in sampled_xys])
-            num_neg_evs_at_xy = np.asarray([len(neg_evs_dict_xy.get(xy, [])) for xy in sampled_xys])
+        for ev in events_in:
+            x, y, t, p = int(ev[0]), int(ev[1]), ev[2], ev[3]
+            last_evs_time[y, x] = t*100
+            if first_evs_pol[y, x] == 0:
+                first_evs_time[y, x] = t*100
+                first_evs_pol[y, x] = p
+
+        if idx == 3:
+            pre_last_evs_time = last_evs_time
+        if idx == 4:
+            print(first_evs_time[563, 343])
+            print(pre_last_evs_time[563, 343])
+            print(idx_time)
+            print(gt_color[563, 343])
             
-            sampled_tensor = torch.tensor(sampled_xys).view(N_evs, -1)
-            i_tensor = sampled_tensor[:, 0].long()
-            j_tensor = sampled_tensor[:, 1].long()
-            events_first_time = []
-            events_last_time = []
-            first_events_polarity = []
-            for xy in sampled_xys:
-                    print(xy)
-                    events_time_stamps = []
-                    events_time_stamps.append([item[2] for item in evs_dict_xy[xy]])
-                    print(events_time_stamps)
-                    events_first_time.append(events_time_stamps[0][0])
-                   
-                    events_last_time.append(events_time_stamps[0][-1])
+            residual_events = (idx_time - pre_last_evs_time)*first_evs_pol / (first_evs_time - pre_last_evs_time)
+            print(residual_events[563, 343])
             break
+        
         
 
     
