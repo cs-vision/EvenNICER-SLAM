@@ -164,8 +164,8 @@ class Tracker(object):
         estimated_tensor = get_tensor_from_camera_in_pytorch(estimated_c2w)
         return estimated_c2w, estimated_tensor
     
-    def get_event_rays(self, i, j, time, pre_c2w, H, W, fx, fy, cx, cy, device, fix=False):
-        idx = time*self.fps/100
+    def get_event_rays(self, idx_tensor, i, j, time, pre_c2w, H, W, fx, fy, cx, cy, device, fix=False):
+        idx = time*self.fps
         c2w, _ = self.get_camera_pose(idx, pre_c2w, device)
         if fix:
             c2w = c2w.clone().detach()
@@ -195,7 +195,7 @@ class Tracker(object):
         pre_gt_gray = self.rgb_to_luma(pre_gt_color)
 
         # NOTE : negative sampling
-        N_noevs = 200
+        N_noevs = 50
         condition = (W//4 < no_evs_pixels[:, 0]) & (no_evs_pixels[:, 0] < W - W//4) & (H//4 < no_evs_pixels[:, 1]) & (no_evs_pixels[:, 1] < H - H//4)
         indices = np.where(condition)[0]
         selected_indices = np.random.choice(indices, size=N_noevs, replace=False)
@@ -214,7 +214,7 @@ class Tracker(object):
         print(loss_events.item())
     
         # NOTE : active sampling
-        N_evs = 100
+        N_evs = 150
         xys_mtNevs = np.array(list(evs_dict_xy.keys()))
         condition = (W//4 < xys_mtNevs[:, 0]) & (xys_mtNevs[:, 0] < W - W//4) & (H//4 < xys_mtNevs[:, 1]) & (xys_mtNevs[:, 1] < H - H//4)
         indices = np.where(condition)[0]
@@ -227,26 +227,25 @@ class Tracker(object):
         sampled_tensor = torch.tensor(sampled_xys).view(N_evs, -1).to(device)
         i_tensor = sampled_tensor[:, 0].long()
         j_tensor = sampled_tensor[:, 1].long()
-        # events_first_time = []
-        # events_last_time = []
+        #events_first_time = []
+        events_last_time = []
         # first_events_polarity = []
-        # for xy in sampled_xys:
-        #     events_time_stamps = []
-        #     events_time_stamps.append([item[2] for item in evs_dict_xy[xy]])
-        #     events_first_time.append(events_time_stamps[0][0])
-        #     events_last_time.append(events_time_stamps[0][-1])
+        for xy in sampled_xys:
+            events_time_stamps = []
+            events_time_stamps.append([item[2] for item in evs_dict_xy[xy]])
+            events_last_time.append(events_time_stamps[0][-1])
 
-        #     events_polarities = []
-        #     events_polarities.append([item[3] for item in evs_dict_xy[xy]])
-        #     first_events_polarity.append(events_polarities[0][0])
 
+        events_last_time = torch.tensor(events_last_time, dtype=torch.float32).reshape(N_evs, -1).to(device)
         evs_at_xy = num_pos_evs_at_xy*0.1 - num_neg_evs_at_xy*0.1 
         evs_at_xy = torch.tensor(evs_at_xy).unsqueeze(1).to(device)
 
-        #events_last_time = torch.tensor(events_last_time, dtype=torch.float32).reshape(N_evs, -1).to(device)
-        events_last_time = last_evs_time[j_tensor, i_tensor].view(N_evs, -1)
+        #events_last_time = last_evs_time[j_tensor, i_tensor].view(N_evs, -1)→なぜかうまくいかない
+
+        # NOTE :　繰り上げしてみる→あんまり意味ない？？
+        #events_last_time = events_last_time.ceil().int()
         # NOTE : last_time(semi-asynchronous)
-        ray_o, ray_d = self.get_event_rays(i_tensor, j_tensor, events_last_time, pre_c2w, H, W, fx, fy, cx, cy, device)
+        ray_o, ray_d = self.get_event_rays(idx, i_tensor, j_tensor, events_last_time, pre_c2w, H, W, fx, fy, cx, cy, device)
         # NOTE : c2w
         #ray_o, ray_d = get_rays_from_uv(i_tensor, j_tensor, c2w, H, W, fx, fy, cx, cy, device)
 
@@ -255,10 +254,6 @@ class Tracker(object):
         _, _, rendered_color = ret
         rendered_gray = self.rgb_to_luma(rendered_color, esim=True)
 
-        #pre_gray = pre_gt_gray[j_tensor, i_tensor]
-        #pre_log_gray = self.lin_log(pre_gray*255)
-
-        # TODO : fixed_pre_log_grayを先に求めておく
         fixed_pre_log_gray = fixed_pre_log_gray[j_tensor, i_tensor]
         expected_gray = self.inverse_lin_log(fixed_pre_log_gray + evs_at_xy)
         
@@ -430,7 +425,6 @@ class Tracker(object):
                 compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
                 camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
 
-
                 initial_loss_camera_tensor = torch.abs(
                     gt_camera_tensor.to(device)-camera_tensor).mean().item()
                 candidate_cam_tensor = None
@@ -501,7 +495,7 @@ class Tracker(object):
                         compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
                         camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
                     
-                        loss_events = self.optimize_after_sampling_pixels(idx, pre_c2w, gt_c2w, camera_tensor,
+                        loss_events = self.optimize_after_sampling_pixels(idx_tensor.unsqueeze(0), estimated_new_cam_c2w, gt_c2w, camera_tensor,
                                                                       evs_dict_xy, pos_evs_dict_xy, neg_evs_dict_xy, no_evs_pixels,
                                                                       pre_gt_color, pre_gt_depth, fixed_pre_log_gray,
                                                                       gt_color, gt_depth, gt_event,
