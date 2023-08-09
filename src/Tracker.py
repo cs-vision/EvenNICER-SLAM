@@ -177,7 +177,7 @@ class Tracker(object):
         return rays_o, rays_d
 
     def optimize_after_sampling_pixels(self, idx, pre_c2w, gt_c2w, camera_tensor,
-                                       evs_dict_xy, pos_evs_dict_xy, neg_evs_dict_xy, no_evs_pixels, common_evs_pixels,
+                                       evs_dict_xy, pos_evs_dict_xy, neg_evs_dict_xy, no_evs_pixels, common_evs_pixels, new_residual_events,
                                        pre_gt_color, pre_gt_depth, fixed_pre_log_gray,
                                        gt_color, gt_depth, gt_event,
                                        last_evs_time,
@@ -219,6 +219,8 @@ class Tracker(object):
         sampled_xys = [tuple(row) for row in sampled_xys]
         num_pos_evs_at_xy = np.asarray([len(pos_evs_dict_xy.get(xy, [])) for xy in sampled_xys])
         num_neg_evs_at_xy = np.asarray([len(neg_evs_dict_xy.get(xy, [])) for xy in sampled_xys])
+        print(type(num_neg_evs_at_xy))
+        print(num_neg_evs_at_xy)
        
         sampled_tensor = torch.tensor(sampled_xys).view(N_evs, -1).to(device)
         i_tensor = sampled_tensor[:, 0].long()
@@ -233,9 +235,11 @@ class Tracker(object):
 
 
         # events_last_time = torch.tensor(events_last_time, dtype=torch.float32).reshape(N_evs, -1).to(device)
-        new_residual_events = new_residual_events[j_tensor, i_tensor]
-        evs_at_xy = num_pos_evs_at_xy*0.1 - num_neg_evs_at_xy*0.1 + new_residual_events*0.1
+        new_residual_events = new_residual_events[j_tensor, i_tensor].view(N_evs, -1)
+        print(new_residual_events)
+        evs_at_xy = num_pos_evs_at_xy*0.1 - num_neg_evs_at_xy*0.1 
         evs_at_xy = torch.tensor(evs_at_xy).unsqueeze(1).to(device)
+        evs_at_xy += new_residual_events
 
         #events_last_time = last_evs_time[j_tensor, i_tensor].view(N_evs, -1)→なぜかうまくいかない
 
@@ -437,8 +441,8 @@ class Tracker(object):
                         key_xy = (ev[0], ev[1])
                         x, y, t, p = int(ev[0]), int(ev[1]), ev[2], ev[3]
                         last_evs_time_4[y, x] = t*100
-                        if key_xy in evs_dict_xy_4.keys():
-                            evs_dict_xy_4[key_xy].append(ev.tolist())
+                        if key_xy not in evs_dict_xy_4.keys():
+                            evs_dict_xy_4[key_xy] = [ev.tolist()]
                 
                 if idx % 5 == 0:
                     events_in_5 = gt_event.cpu().numpy()
@@ -449,13 +453,13 @@ class Tracker(object):
                     for ev in events_in_5:
                         key_xy = (ev[0], ev[1])
                         x, y, t, p = int(ev[0]), int(ev[1]), ev[2], ev[3]
-                        if key_xy in evs_dict_xy_5.keys():
-                            evs_dict_xy_5[key_xy].append(ev.tolist())
+                        if key_xy not in evs_dict_xy_5.keys():
+                            evs_dict_xy_5[key_xy] = [ev.tolist()]
                             first_evs_time_5[y, x] = t*100
                             first_evs_pol_5 = p
                     
                     common_evs_keys = set(evs_dict_xy_4.keys()) & set(evs_dict_xy_5.keys())
-                    common_evs_pixels = np.array(list(common_evs_keys))
+                    common_evs_pixels = np.array(list(common_evs_keys)).reshape(-1, 2)
                     print(common_evs_pixels)
 
                     idx_time_4 = torch.full((self.H, self.W), (idx-1)/self.fps*100).to(self.device)
