@@ -219,8 +219,6 @@ class Tracker(object):
         sampled_xys = [tuple(row) for row in sampled_xys]
         num_pos_evs_at_xy = np.asarray([len(pos_evs_dict_xy.get(xy, [])) for xy in sampled_xys])
         num_neg_evs_at_xy = np.asarray([len(neg_evs_dict_xy.get(xy, [])) for xy in sampled_xys])
-        print(type(num_neg_evs_at_xy))
-        print(num_neg_evs_at_xy)
        
         sampled_tensor = torch.tensor(sampled_xys).view(N_evs, -1).to(device)
         i_tensor = sampled_tensor[:, 0].long()
@@ -236,7 +234,6 @@ class Tracker(object):
 
         # events_last_time = torch.tensor(events_last_time, dtype=torch.float32).reshape(N_evs, -1).to(device)
         new_residual_events = new_residual_events[j_tensor, i_tensor].view(N_evs, -1)
-        print(new_residual_events)
         evs_at_xy = num_pos_evs_at_xy*0.1 - num_neg_evs_at_xy*0.1 
         evs_at_xy = torch.tensor(evs_at_xy).unsqueeze(1).to(device)
         evs_at_xy += new_residual_events
