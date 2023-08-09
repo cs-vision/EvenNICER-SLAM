@@ -194,7 +194,7 @@ class Tracker(object):
         pre_gt_gray = self.rgb_to_luma(pre_gt_color)
 
         # NOTE : negative sampling
-        N_noevs = 10
+        N_noevs = 50
         condition = (W//4 < no_evs_pixels[:, 0]) & (no_evs_pixels[:, 0] < W - W//4) & (H//4 < no_evs_pixels[:, 1]) & (no_evs_pixels[:, 1] < H - H//4)
         indices = np.where(condition)[0]
         selected_indices = np.random.choice(indices, size=N_noevs, replace=False)
@@ -218,7 +218,7 @@ class Tracker(object):
         print(loss_events.item())
     
         # NOTE : active sampling
-        N_evs = 200
+        N_evs = 150
         xys_mtNevs = np.array(list(evs_dict_xy.keys()))
         condition = (W//4 < xys_mtNevs[:, 0]) & (xys_mtNevs[:, 0] < W - W//4) & (H//4 < xys_mtNevs[:, 1]) & (xys_mtNevs[:, 1] < H - H//4)
         indices = np.where(condition)[0]
