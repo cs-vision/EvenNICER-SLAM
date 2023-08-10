@@ -190,7 +190,7 @@ class Tracker(object):
 
 
         # NOTE : negative sampling
-        N_noevs = 50
+        N_noevs = 200
         condition = (W//4 < no_evs_pixels[:, 0]) & (no_evs_pixels[:, 0] < W - W//4) & (H//4 < no_evs_pixels[:, 1]) & (no_evs_pixels[:, 1] < H - H//4)
         indices = np.where(condition)[0]
         selected_indices = np.random.choice(indices, size=N_noevs, replace=False)
@@ -210,7 +210,7 @@ class Tracker(object):
 
     
         # NOTE : active sampling
-        N_evs = 150
+        N_evs = 100
         #xys_mtNevs = np.array(list(evs_dict_xy.keys()))
         condition = (W//4 < common_evs_pixels[:, 0]) & (common_evs_pixels[:, 0] < W - W//4) & (H//4 < common_evs_pixels[:, 1]) & (common_evs_pixels[:, 1] < H - H//4)
         indices = np.where(condition)[0]
@@ -457,7 +457,6 @@ class Tracker(object):
                     
                     common_evs_keys = set(evs_dict_xy_4.keys()) & set(evs_dict_xy_5.keys())
                     common_evs_pixels = np.array(list(common_evs_keys)).reshape(-1, 2)
-                    print(common_evs_pixels)
 
                     idx_time_4 = torch.full((self.H, self.W), (idx-1)/self.fps*100).to(self.device)
 
