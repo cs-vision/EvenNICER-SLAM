@@ -63,10 +63,24 @@ class Tracker(object):
         self.n_img = len(self.frame_reader)
         self.frame_loader = DataLoader(
             self.frame_reader, batch_size=1, shuffle=False, num_workers=1)
+        
+        #wandb
+        self.slam = slam
+        self.experiment = slam.experiment
+
         self.visualizer = Visualizer(freq=cfg['tracking']['vis_freq'], inside_freq=cfg['tracking']['vis_inside_freq'],
                                      vis_dir=os.path.join(self.output, 'vis' if 'Demo' in self.output else 'tracking_vis'),
-                                     renderer=self.renderer, verbose=self.verbose, device=self.device)
+                                     renderer=self.renderer, verbose=self.verbose, 
+                                     experiment=self.experiment, # wandb
+                                     device=self.device,
+                                     stage = 'tracker')
+        # self.visualizer = Visualizer(freq=cfg['tracking']['vis_freq'], inside_freq=cfg['tracking']['vis_inside_freq'],
+        #                              vis_dir=os.path.join(self.output, 'vis' if 'Demo' in self.output else 'tracking_vis'),
+        #                              renderer=self.renderer, verbose=self.verbose, device=self.device)
         self.H, self.W, self.fx, self.fy, self.cx, self.cy = slam.H, slam.W, slam.fx, slam.fy, slam.cx, slam.cy
+
+        # NOTE : Depth
+        self.use_color_in_depth = True
 
     def optimize_cam_in_batch(self, camera_tensor, gt_color, gt_depth, batch_size, optimizer):
         """
@@ -114,18 +128,26 @@ class Tracker(object):
         else:
             mask = batch_gt_depth > 0
 
-        loss = (torch.abs(batch_gt_depth-depth) /
-                torch.sqrt(uncertainty+1e-10))[mask].sum()
+        color_loss = (torch.abs(
+            batch_gt_color - color)[mask].sum()) / 2
+        
+        if self.use_color_in_depth:
+            loss = (torch.abs(batch_gt_depth-depth) /
+                    torch.sqrt(uncertainty+1e-10))[mask].sum()
+            color_loss += loss
 
-        if self.use_color_in_tracking:
-            color_loss = torch.abs(
-                batch_gt_color - color)[mask].sum()
-            loss += self.w_color_loss*color_loss
+        # loss = (torch.abs(batch_gt_depth-depth) /
+        #         torch.sqrt(uncertainty+1e-10))[mask].sum()
 
-        loss.backward()
+        # if self.use_color_in_tracking:
+        #     color_loss = torch.abs(
+        #         batch_gt_color - color)[mask].sum()
+        #     loss += self.w_color_loss*color_loss
+
+        color_loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-        return loss.item()
+        return color_loss.item()
 
     def update_para_from_mapping(self):
         """
@@ -237,11 +259,32 @@ class Tracker(object):
 
                     loss_camera_tensor = torch.abs(
                         gt_camera_tensor.to(device)-camera_tensor).mean().item()
+                    
+                    fixed_camera_tensor = camera_tensor.clone().detach()
+                    if camera_tensor[0] < 0:
+                        fixed_camera_tensor[:4] *= -1
+                    fixed_camera_error = torch.abs(gt_camera_tensor.to(device)- fixed_camera_tensor).mean().item()
+                
+                    
                     if self.verbose:
                         if cam_iter == self.num_cam_iters-1:
                             print(
                                 f'Re-rendering loss: {initial_loss:.2f}->{loss:.2f} ' +
                                 f'camera tensor error: {initial_loss_camera_tensor:.4f}->{loss_camera_tensor:.4f}')
+                            dict_log = {
+                                'RGBD loss' : loss,
+                                'RGBD loss improvement': initial_loss - loss,
+                                'Camera error': loss_camera_tensor,
+                                'Fixed camera error' : fixed_camera_error,
+                                'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
+                                'Frame': idx,
+                                'first element of quaternion' : camera_tensor[0], 
+                                'first element of gt quaternion' : gt_camera_tensor[0],
+                                'first element of translation' : camera_tensor[4],
+                                'first element of gt translation' : gt_camera_tensor[4]
+                                }
+                            self.experiment.log(dict_log)
+        
                     if loss < current_min_loss:
                         current_min_loss = loss
                         candidate_cam_tensor = camera_tensor.clone().detach()
