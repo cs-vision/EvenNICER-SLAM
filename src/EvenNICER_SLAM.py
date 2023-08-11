@@ -9,10 +9,8 @@ import torch.multiprocessing as mp
 
 from src import config
 from src.Mapper_nice import Mapper
-from src.Tracker_nicepose import Tracker
-#from src.Tracker_nice import Tracker
-
-#from src.Tracker import Tracker
+#from src.Tracker_nicepose import Tracker
+from src.Tracker_nice import Tracker
 from src.utils.datasets import get_dataset
 from src.utils.Logger import Logger
 from src.utils.Mesher import Mesher
