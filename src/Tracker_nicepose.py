@@ -153,10 +153,10 @@ class Tracker(object):
         color_loss = (torch.abs(
             batch_gt_color - color)[mask].sum()) / 2
         
-        if self.use_color_in_depth:
-            loss = (torch.abs(batch_gt_depth-depth) /
-                    torch.sqrt(uncertainty+1e-10))[mask].sum()
-            color_loss += loss
+        # if self.use_color_in_depth:
+        #loss = (torch.abs(batch_gt_depth-depth) /
+                    #torch.sqrt(uncertainty+1e-10))[mask].sum()
+        #color_loss += loss
             
 
         color_loss.backward()   
@@ -317,7 +317,7 @@ class Tracker(object):
                                 'first element of gt translation' : gt_camera_tensor[4]
                                 }
                             self.experiment.log(dict_log)
-
+        
                     if loss < current_min_loss:
                         candidate_idx = cam_iter
                         current_min_loss = loss

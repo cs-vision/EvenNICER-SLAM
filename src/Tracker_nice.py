@@ -80,7 +80,7 @@ class Tracker(object):
         self.H, self.W, self.fx, self.fy, self.cx, self.cy = slam.H, slam.W, slam.fx, slam.fy, slam.cx, slam.cy
 
         # NOTE : Depth
-        self.use_color_in_depth = True
+        self.use_color_in_depth = False
 
     def optimize_cam_in_batch(self, camera_tensor, gt_color, gt_depth, batch_size, optimizer):
         """
@@ -131,10 +131,10 @@ class Tracker(object):
         color_loss = (torch.abs(
             batch_gt_color - color)[mask].sum()) / 2
         
-        if self.use_color_in_depth:
-            loss = (torch.abs(batch_gt_depth-depth) /
-                    torch.sqrt(uncertainty+1e-10))[mask].sum()
-            color_loss += loss
+        # if self.use_color_in_depth:
+        #loss = (torch.abs(batch_gt_depth-depth) /
+                    #torch.sqrt(uncertainty+1e-10))[mask].sum()
+        #color_loss += loss
 
         # loss = (torch.abs(batch_gt_depth-depth) /
         #         torch.sqrt(uncertainty+1e-10))[mask].sum()
