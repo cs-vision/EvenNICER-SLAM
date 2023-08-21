@@ -129,7 +129,7 @@ class Tracker(object):
             mask = batch_gt_depth > 0
 
         color_loss = (torch.abs(
-            batch_gt_color - color)[mask].sum()) / 2
+            batch_gt_color - color)[mask].sum()) 
         
         # if self.use_color_in_depth:
         #loss = (torch.abs(batch_gt_depth-depth) /
@@ -142,12 +142,12 @@ class Tracker(object):
         # if self.use_color_in_tracking:
         #     color_loss = torch.abs(
         #         batch_gt_color - color)[mask].sum()
-        #     loss += self.w_color_loss*color_loss
+        loss = self.w_color_loss*color_loss
 
-        color_loss.backward()
+        loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-        return color_loss.item()
+        return loss.item()
 
     def update_para_from_mapping(self):
         """
@@ -209,7 +209,7 @@ class Tracker(object):
                     self.visualizer.vis(
                         idx, 0, gt_depth, gt_color, c2w, self.c, self.decoders)
 
-            else:
+            elif idx % 5 == 0:
                 gt_camera_tensor = get_tensor_from_camera(gt_c2w)
                 if self.const_speed_assumption and idx-2 >= 0:
                     pre_c2w = pre_c2w.float()
