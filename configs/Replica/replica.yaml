@@ -20,7 +20,7 @@ tracking:
   ignore_edge_H: 100
   seperate_LR: False
   # NOTE : PoseNetありかなしか
-  const_speed_assumption: True
+  const_speed_assumption: False
   lr: 0.001
   pixels: 200
   iters: 10

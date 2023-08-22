@@ -142,7 +142,7 @@ class Tracker(object):
         else:
             mask = batch_gt_depth > 0
 
-        #loss = (torch.abs(batch_gt_depth-depth) /
+        # loss = (torch.abs(batch_gt_depth-depth) /
         #        torch.sqrt(uncertainty+1e-10))[mask].sum()
 
         # if self.use_color_in_tracking:
@@ -151,13 +151,7 @@ class Tracker(object):
         #     loss += self.w_color_loss*color_loss
 
         color_loss = (torch.abs(
-            batch_gt_color - color)[mask].sum()) / 2
-        
-        # if self.use_color_in_depth:
-        #loss = (torch.abs(batch_gt_depth-depth) /
-                    #torch.sqrt(uncertainty+1e-10))[mask].sum()
-        #color_loss += loss
-            
+            batch_gt_color - color)[mask].sum()) * self.w_color_loss
 
         color_loss.backward()   
 
