@@ -78,6 +78,7 @@ Download the dataset here and unzip under the directory `./Datasets`:
 https://polybox.ethz.ch/index.php/s/MVQmhiVniF2UzEi
 
 There are some recordings with rendered depth maps ready. (recording3, 4)
+
 For recordings for which depth maps are not ready, depth maps need to be rendered manually (code to be updated...)
 
 Run EvenNICER-SLAM on the RPG dataset by specifying the correct config file. For example:
