@@ -1,0 +1,71 @@
+# dataset: 'rpg'
+dataset: 'rpg_event'
+# dataset: 'rpg_event_dense'
+event:
+  pretrained_path: 'pretrained/eventnet_2head_rpg_epoch1.pth'
+  rgbd_every_frame: 5 # RGBD frame gap
+  # below are currently only for tracking. Consider moving to 'tracking' if these configs need to be separately set for tracking and mapping.
+  activate_events: True # A switch to turn on/off event loss backpropagation
+  balancer: 0.025 # Lambda_event in the paper. A coefficient to balance event loss and rgbd loss
+  scale_factor: 0.15 # for event image downscaling
+  blur: True # blur both the gt and predicted event images before loss computation to alleviate alignment issue. Uses the Gaussian kernels below
+  kernel_sizes: [9] # Side lengths of Gaussian kernels. Must be a list of odd numbers. Multiple elements for multiple kernels
+  unblurred_weight: 0 # Weight for loss from unblurred event images
+  kernel_weights: [1] # Weights for loss from blurred event images using specified kernels. Must be of the same length as 'kernel_sizes'
+meshing:
+  eval_rec: True
+tracking:
+  # vis_freq: 50
+  # vis_freq: 5
+  vis_freq: 3
+  # vis_freq: 8
+  # vis_freq: 4
+  # vis_freq: 12
+  vis_inside_freq: 25
+  ignore_edge_W: 30
+  ignore_edge_H: 30
+  seperate_LR: False
+  const_speed_assumption: True
+  # const_speed_assumption: False # this one better for fewer events
+  lr: 0.001 # need larger?
+  # lr: 0.002
+  # lr: 0.005 # too high?
+  pixels: 200
+  iters: 10
+
+  dense_ratio: 1
+mapping:
+  # every_frame: 5
+  every_frame: 3
+  # every_frame: 1
+  # every_frame: 8
+  # every_frame: 4
+  # every_frame: 12
+  # vis_freq: 50
+  # vis_freq: 5
+  # vis_freq: 8
+  # vis_freq: 4
+  vis_freq: 3
+  # vis_freq: 12
+  vis_inside_freq: 30
+  mesh_freq: 50
+  # ckpt_freq: 500
+  ckpt_freq: 100
+  # ckpt_freq: 30
+  # ckpt_freq: 40
+  # ckpt_freq: 36
+  keyframe_every: 50
+  mapping_window_size: 5
+  pixels: 1000 # can be smaller since images are smaller?
+  iters_first: 1500
+  iters: 60
+cam:
+  H: 260
+  W: 346
+  fx: 196.71854278974607
+  fy: 196.68898128242577
+  cx: 172.5
+  cy: 129.5
+  png_depth_scale: 1000.0 #for depth image in png format
+  crop_edge: 0
+  distortion: [-0.08409333, 0.05335822, -0.00065521, -0.0001679, 0, 0, 0, 0]

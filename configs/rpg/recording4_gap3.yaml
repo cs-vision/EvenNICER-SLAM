@@ -1,0 +1,10 @@
+inherit_from: configs/rpg/rpg.yaml
+mapping: # +-3.5 from tangential bounds
+# tangential bounds of room.ply: x_min: -3.45512318611145, x_max: 5.905721664428711, y_min: -3.020528793334961, y_max: 0.08428650349378586, z_min: -5.743973255157471, z_max: 6.004443168640137
+  bound: [[-7.0,9.4],[-6.5,3.6],[-9.2,9.5]]
+  marching_cubes_bound: [[-7.0,9.4],[-6.5,3.6],[-9.2,9.5]]
+data:
+  input_folder: Datasets/RPG/recording4
+  output: output/RPG/recording4_gap3
+  # event folder
+  event_folder: Datasets/RPG_event/recording4
