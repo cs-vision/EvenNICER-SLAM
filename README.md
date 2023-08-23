@@ -69,5 +69,24 @@ The experiments can be monitored using wandb.
 
 ### Real-world Dataset from RPG
 
-Coming soon...
+This dataset is based on https://rpg.ifi.uzh.ch/direct_event_camera_tracking/index.html
+The original dataset from RPG provides RGBE and GT poses, and a point cloud.
+The depth maps are rendered using Open3D from the point clouds (and thus noisy).
+The GT poses are also manually transformed to fit the required coordinate system for SLAM application, so they might be numerically noisy as well.
 
+Download the dataset here and unzip under the directory `./Datasets`:
+https://polybox.ethz.ch/index.php/s/MVQmhiVniF2UzEi
+
+There are some recordings with rendered depth maps ready. (recording3, 4)
+For recordings for which depth maps are not ready, depth maps need to be rendered manually (code to be updated...)
+
+Run EvenNICER-SLAM on the RPG dataset by specifying the correct config file. For example:
+```bash
+python -W ignore run.py configs/rpg/recording4.yaml --output output
+```
+
+The bash script for SLURM is also updated. It can be run by typing:
+```bash
+mkdir -p ./output/log ./output/wandb
+sbatch ./scripts/slurm_run.sh
+```
