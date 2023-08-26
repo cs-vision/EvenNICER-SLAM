@@ -25,31 +25,31 @@ esim.setParameters(contrast_threshold_pos, contrast_threshold_neg, refractory_pe
 places = [
         #  'office0',
         #   'office0_dense9995',→ what are these data?
-          #'office1',
+          'office1'
           #'office2',
           #'office3',
           #'office4',
-          'room0',
+          #'room0',
           #'room1',
           #'room2'
         ]
 
 input_dir = '/scratch_net/biwidl215/myamaguchi/rpg_vid2e-master/data/Replica'
 
-output_folder = '/scratch_net/biwidl215/myamaguchi/rpg_vid2e-master/output'
+output_folder = '/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/Datasets/replica_gt_events'
 
 
 
 for place in places:
     list_of_image_files = sorted(glob.glob(f'{input_dir}/{place}/results/frame*.jpg'))
     # downsampling each image
-    list_of_downscaled_images = []
-    for image_file in list_of_image_files:
-        image = cv2.imread(image_file)
-        new_width = image.shape[1] // 4
-        new_height = image.shape[0] // 4
-        downscaled_image = cv2.resize(image, (new_width, new_height))
-        output_file = image_file.replace('.jpg', f'_downsampled.jpg')
+    # list_of_downscaled_images = []
+    # for image_file in list_of_image_files:
+    #     image = cv2.imread(image_file)
+    #     new_width = image.shape[1] // 4
+    #     new_height = image.shape[0] // 4
+    #     downscaled_image = cv2.resize(image, (new_width, new_height))
+    #     output_file = image_file.replace('.jpg', f'_downsampled.jpg')
         #cv2.imwrite(output_file, downscaled_image)
         #list_of_downscaled_images.append(output_file)
 
@@ -90,8 +90,8 @@ for place in places:
                 f.write(line + '\n')
         # timestamp, x, y, polarity
 
-    list_of_downsampled_files = glob.glob("/scratch_net/biwidl215/myamaguchi/rpg_vid2e-master/data/Replica/room0/results/*_downsampled.jpg")
-    for file in list_of_downsampled_files:
-        os.remove(file)
+    # list_of_downsampled_files = glob.glob("/scratch_net/biwidl215/myamaguchi/rpg_vid2e-master/data/Replica/room0/results/*_downsampled.jpg")
+    # for file in list_of_downsampled_files:
+    #     os.remove(file)
 
 
