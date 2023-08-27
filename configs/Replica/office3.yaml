@@ -6,4 +6,4 @@ data:
   input_folder: Datasets/Replica/office3
   output: output/Replica/office3
   # event folder
-  event_folder: Datasets/replica_gt_png/office3
+  event_folder: Datasets/replica_gt_events/office3

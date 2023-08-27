@@ -6,4 +6,4 @@ data:
   input_folder: Datasets/Replica/room1
   output: output/Replica/room1
   # event folder
-  event_folder: Datasets/replica_gt_png/room1
+  event_folder: Datasets/replica_gt_events/room1
