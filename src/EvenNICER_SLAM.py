@@ -10,8 +10,8 @@ import torch.multiprocessing as mp
 from src import config
 from src.Mapper import Mapper
 #from src.Tracker_with_PoseNet_small_learning_rate import Tracker
-from src.Tracker_with_PoseNet import Tracker
-#from src.Tracker import Tracker
+#from src.Tracker_with_PoseNet import Tracker
+from src.Tracker import Tracker
 from src.utils.datasets import get_dataset
 from src.utils.Logger import Logger
 from src.utils.Mesher import Mesher
