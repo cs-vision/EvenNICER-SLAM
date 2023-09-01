@@ -218,7 +218,12 @@ class Tracker(object):
         xys_mtNevs = np.array(list(evs_dict_xy.keys()))
         condition = (W//4 < xys_mtNevs[:, 0]) & (xys_mtNevs[:, 0] < W - W//4) & (H//4 < xys_mtNevs[:, 1]) & (xys_mtNevs[:, 1] < H - H//4)
         indices = np.where(condition)[0]
-        selected_indices = np.random.choice(indices, size=N_evs, replace=False)
+        if len(indices) > 0:
+            selected_indices = np.random.choice(indices, size=N_evs, replace=True)
+        else:
+            condition = (W//16 < xys_mtNevs[:, 0]) & (xys_mtNevs[:, 0] < W - W//16) & (H//16 < xys_mtNevs[:, 1]) & (xys_mtNevs[:, 1] < H - H//16)
+            indices = np.where(condition)[0]
+            selected_indices = np.random.choice(xys_mtNevs, size=N_evs, replace=True)
         sampled_xys =  xys_mtNevs[selected_indices]
         sampled_xys = [tuple(row) for row in sampled_xys]
         num_pos_evs_at_xy = np.asarray([len(pos_evs_dict_xy.get(xy, [])) for xy in sampled_xys])
