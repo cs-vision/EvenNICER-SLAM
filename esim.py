@@ -23,14 +23,14 @@ esim.setParameters(contrast_threshold_pos, contrast_threshold_neg, refractory_pe
 
 # generate Replica events
 places = [
-        #  'office0',
+        'office0'
         #   'office0_dense9995',→ what are these data?
           #'office1'
           #'office2',
           #'office3',
-          #'office4',
+          #'office4'
           #'room0',
-          'room1'
+          #'room1'
           #'room2'
         ]
 
@@ -78,17 +78,22 @@ for place in places:
     for i in range(n_frames-1):
         txt_filename = place + '_' + 'events' + str(i).zfill(6) + '_' + str(i+1).zfill(6) + '.txt'
         events_list_of_images = esim.generateFromStampedImageSequence(
-            list_of_image_files[i : i + 2],
-            #list_of_downscaled_images[i : i+2],   # list of absolute paths to images   
+            list_of_image_files[i : i + 2], # list of absolute paths to images     
             list_of_timestamps + interval*i             # list of timestamps in ascending order
-        ) # each event: [x, y, t, polarity]
-          # print(type(events_list_of_images)): numpy.ndarray
-        events_list_of_images[:, :2] = events_list_of_images[:, :2].astype("int32")
+        ) 
+        # each event: [x, y, t, polarity]
+        # print(type(events_list_of_images)): numpy.ndarray
+        #events_list_of_images[:, :] = events_list_of_images[:, :2].astype("int16")
+        # [x, y, t, polarity]→[t, x, y, polarity]
+        events_list_of_images_new = np.hstack((events_list_of_images[:, 2:3], events_list_of_images[:, 0:2], events_list_of_images[:, 3:]))
+        events_list_of_images_new[:, 1:] = events_list_of_images_new[:, 1:].astype("int16")
+
         with open(os.path.join(output_dir, txt_filename), 'w') as f:
-            for row in events_list_of_images:
+            f.write("1200 680\n")
+            for row in events_list_of_images_new:
                 line = " ".join(str(x) for x in row)
                 f.write(line + '\n')
-        # timestamp, x, y, polarity
+
 
     # list_of_downsampled_files = glob.glob("/scratch_net/biwidl215/myamaguchi/rpg_vid2e-master/data/Replica/room0/results/*_downsampled.jpg")
     # for file in list_of_downsampled_files:
