@@ -42,18 +42,6 @@ output_folder = '/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/Datasets/repli
 
 for place in places:
     list_of_image_files = sorted(glob.glob(f'{input_dir}/{place}/results/frame*.jpg'))
-    # downsampling each image
-    # list_of_downscaled_images = []
-    # for image_file in list_of_image_files:
-    #     image = cv2.imread(image_file)
-    #     new_width = image.shape[1] // 4
-    #     new_height = image.shape[0] // 4
-    #     downscaled_image = cv2.resize(image, (new_width, new_height))
-    #     output_file = image_file.replace('.jpg', f'_downsampled.jpg')
-        #cv2.imwrite(output_file, downscaled_image)
-        #list_of_downscaled_images.append(output_file)
-
-
     n_frames = len(list_of_image_files)
     print('starting to process', place, 'with', n_frames, 'frames...\n')
 
@@ -67,24 +55,13 @@ for place in places:
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    # events_list_of_images = esim.generateFromStampedImageSequence(
-    #     list_of_image_files,
-    #     list_of_timestamps
-    # )
-    # print(events_list_of_images.shape)
-
-    #txt_filename = place + '_' + 'events.txt'
-    #with open (os.path.join(output_dir, txt_filename), 'w') as f:
     for i in range(n_frames-1):
         txt_filename = place + '_' + 'events' + str(i).zfill(6) + '_' + str(i+1).zfill(6) + '.txt'
         events_list_of_images = esim.generateFromStampedImageSequence(
             list_of_image_files[i : i + 2], # list of absolute paths to images     
             list_of_timestamps + interval*i             # list of timestamps in ascending order
         ) 
-        # each event: [x, y, t, polarity]
-        # print(type(events_list_of_images)): numpy.ndarray
-        #events_list_of_images[:, :] = events_list_of_images[:, :2].astype("int16")
-        # [x, y, t, polarity]→[t, x, y, polarity]
+    
         events_list_of_images_new = np.hstack((events_list_of_images[:, 2:3], events_list_of_images[:, 0:2], events_list_of_images[:, 3:]))
         events_list_of_images_new[:, 1:] = events_list_of_images_new[:, 1:].astype("int16")
 
@@ -95,8 +72,5 @@ for place in places:
                 f.write(line + '\n')
 
 
-    # list_of_downsampled_files = glob.glob("/scratch_net/biwidl215/myamaguchi/rpg_vid2e-master/data/Replica/room0/results/*_downsampled.jpg")
-    # for file in list_of_downsampled_files:
-    #     os.remove(file)
-
+  
 

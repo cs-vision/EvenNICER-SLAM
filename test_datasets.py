@@ -140,7 +140,7 @@ def main():
                         help='event input folder, this have higher priority, can overwrite the one in config file')
     
     args = parser.parse_args()
-    cfg = config.load_config('/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/configs/Replica/room0.yaml')
+    cfg = config.load_config('/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/configs/Replica/office0.yaml')
     # slam = EvenNICER_SLAM(cfg, args)
     frame_reader = get_dataset(
             cfg, args, scale=1)
@@ -166,22 +166,19 @@ def main():
 
         for ev in events_in:
             x, y, t, p = int(ev[0]), int(ev[1]), ev[2], ev[3]
-            last_evs_time[y, x] = t*100
-            if first_evs_pol[y, x] == 0:
-                first_evs_time[y, x] = t*100
-                first_evs_pol[y, x] = p
+            print(x, y, t, p)
 
         if idx == 3:
-            pre_last_evs_time = last_evs_time
-        if idx == 4:
-            print(first_evs_time[563, 343])
-            print(pre_last_evs_time[563, 343])
-            print(idx_time)
-            print(gt_color[563, 343])
-            
-            residual_events = (idx_time - pre_last_evs_time)*first_evs_pol / (first_evs_time - pre_last_evs_time)
-            print(residual_events[563, 343])
             break
+
+        # if idx == 4:
+        #     print(first_evs_time[563, 343])
+        #     print(pre_last_evs_time[563, 343])
+        #     print(idx_time)
+        #     print(gt_color[563, 343])
+            
+        #     residual_events = (idx_time - pre_last_evs_time)*first_evs_pol / (first_evs_time - pre_last_evs_time)
+        #     print(residual_events[563, 343])
         
         
 

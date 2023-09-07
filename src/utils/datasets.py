@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from src.common import as_intrinsics_matrix
 from torch.utils.data import Dataset
 
+import h5py # change event dataformat
 
 def readEXR_onlydepth(filename):
     """
@@ -614,7 +615,7 @@ class Replica_event_txt(Replica):
             self.event_folder = cfg['data']['event_folder']
         else:
             self.event_folder = args.event_folder
-        self.event_paths = sorted(glob.glob(f'{self.event_folder}/*events*.txt'))
+        self.event_paths = sorted(glob.glob(f'{self.event_folder}/*events*.h5'))
         self.n_event = len(self.event_paths)
         assert self.n_event == self.n_img - 1, f"Number of GT events does not match that of GT images!"
 
@@ -629,10 +630,11 @@ class Replica_event_txt(Replica):
         else:
             event_path = None
         if event_path is not None : 
-            event_data = np.loadtxt(self.event_paths[index_event])
+            #event_data = np.loadtxt(self.event_paths[index_event])
+            event_data = self.read_h5_events(self.event_paths[index_event])
 
         else:
-            event_data = np.zeros((1, 4))
+            event_data = np.zeros((1, 4)) # dummy event
         event_data = torch.from_numpy(event_data)
         
         if '.png' in depth_path:
@@ -679,6 +681,18 @@ class Replica_event_txt(Replica):
         evs_dict_xy = {}
         
         return index, color_data.to(self.device), depth_data.to(self.device), event_data.to(self.device), pose.to(self.device)
+    
+    def read_h5_events(self, hdf_path):
+        """
+        Read events from HDF5 file into 4xN numpy array (N=number of events)
+        """
+        f = h5py.File(hdf_path, 'r')
+        if 'events/x' in f:
+            #legacy
+            events = np.stack((f['events/x'][:], f['events/y'][:], f['events/ts'][:], np.where(f['events/p'][:], 1, -1)), axis=1)
+        else:
+            events = np.stack((f['events/xs'][:], f['events/ys'][:], f['events/ts'][:], np.where(f['events/ps'][:], 1, -1)), axis=1)
+        return events
 
 
 dataset_dict = {

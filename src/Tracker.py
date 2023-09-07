@@ -214,7 +214,7 @@ class Tracker(object):
         print(loss_events.item())
     
         # NOTE : active sampling
-        N_evs = 150
+        N_evs = 100
         xys_mtNevs = np.array(list(evs_dict_xy.keys()))
         condition = (W//4 < xys_mtNevs[:, 0]) & (xys_mtNevs[:, 0] < W - W//4) & (H//4 < xys_mtNevs[:, 1]) & (xys_mtNevs[:, 1] < H - H//4)
         indices = np.where(condition)[0]
@@ -223,7 +223,7 @@ class Tracker(object):
         else:
             condition = (W//16 < xys_mtNevs[:, 0]) & (xys_mtNevs[:, 0] < W - W//16) & (H//16 < xys_mtNevs[:, 1]) & (xys_mtNevs[:, 1] < H - H//16)
             indices = np.where(condition)[0]
-            selected_indices = np.random.choice(xys_mtNevs, size=N_evs, replace=True)
+            selected_indices = np.random.choice(indices, size=N_evs, replace=True)
         sampled_xys =  xys_mtNevs[selected_indices]
         sampled_xys = [tuple(row) for row in sampled_xys]
         num_pos_evs_at_xy = np.asarray([len(pos_evs_dict_xy.get(xy, [])) for xy in sampled_xys])
@@ -246,9 +246,6 @@ class Tracker(object):
         evs_at_xy = torch.tensor(evs_at_xy).unsqueeze(1).to(device)
 
         #events_last_time = last_evs_time[j_tensor, i_tensor].view(N_evs, -1)→なぜかうまくいかない
-
-        # NOTE :　繰り上げしてみる→あんまり意味ない？？
-        #events_last_time = events_last_time.ceil().int()
         # NOTE : last_time(semi-asynchronous)
         ray_o, ray_d = self.get_event_rays(idx, i_tensor, j_tensor, events_last_time, pre_c2w, H, W, fx, fy, cx, cy, device)
         # NOTE : c2w
@@ -434,7 +431,6 @@ class Tracker(object):
                     gt_camera_tensor.to(device)-camera_tensor).mean().item()
                 candidate_cam_tensor = None
                 current_min_loss = 10000000000.
-                current_min_loss_events = 10000000000.
                 # NOTE : accumulate event 
                 gt_event_integrate = torch.cat((gt_event_integrate, gt_event), dim = 0)
                 if idx % 5 == 0:
@@ -548,13 +544,7 @@ class Tracker(object):
 
                                     self.experiment.log(dict_log)
 
-                        # if loss_events < current_min_loss_events:
-                        #     current_min_loss_events = loss_events
-                        #     candidate_cam_tensor = camera_tensor.clone().detach()
-                        #     if not self.use_last:
-                        #         candidate_transNet_para = self.transNet.state_dict()
-                        #         candidate_quatsNet_para = self.quatsNet.state_dict()
-
+                        
                         if loss_rgbd < current_min_loss:
                             current_min_loss = loss_rgbd
                             candidate_cam_tensor = camera_tensor.clone().detach()
