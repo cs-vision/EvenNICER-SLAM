@@ -95,6 +95,9 @@ class Tracker(object):
         self.fps = 120
         self.use_last = False
 
+        # NOTE :event
+        self.event = True
+
     def init_posenet_train(self, scale=1.0):
         self.optim_trans_init = torch.optim.Adam([dict(params=self.transNet.parameters(), lr = self.cam_lr*1*scale)])
         self.optim_quats_init = torch.optim.Adam([dict(params=self.quatsNet.parameters() , lr = self.cam_lr*0.2*scale)])
@@ -242,9 +245,8 @@ class Tracker(object):
             events_last_time.append(events_time_stamps[0][-1])
             events_first_time.append(events_time_stamps[0][0])
             first_event_polarity.append(events_polarities[0][0])
-
-            events_pre_time_stamps = []
             if xy in pre_evs_dict_xy.keys():
+                events_pre_time_stamps = []
                 events_pre_time_stamps.append([item[2] for item in pre_evs_dict_xy[xy]])
                 events_pre_last_time.append(events_pre_time_stamps[0][-1])
             elif idx >= 10:
@@ -268,7 +270,7 @@ class Tracker(object):
         _, _, rendered_color = ret
         rendered_gray = self.rgb_to_luma(rendered_color, esim=True)
 
-        # # NOTE: get fixed_pre_log_gray
+        # NOTE: get fixed_pre_log_gray
         pre_gt_gray = self.rgb_to_luma(pre_gt_color)[j_tensor, i_tensor]
         fixed_pre_log_gray_new = self.lin_log(pre_gt_gray*255)
         idx_time = torch.full((N_evs, 1), (idx-5)/self.fps, dtype=torch.float64).to(self.device)
@@ -278,7 +280,7 @@ class Tracker(object):
 
 
 
-        expected_gray = self.inverse_lin_log(fixed_pre_log_gray_new + evs_at_xy)
+        expected_gray = self.inverse_lin_log(fixed_pre_log_gray_new + evs_at_xy*0.1)
         
         active_sampling  = True
         if active_sampling:
@@ -464,40 +466,40 @@ class Tracker(object):
                     # neg_evs_dict_xy = {}
                     evs_dict_xy = {}
 
+                    if self.event == True:
+                        start = time.time()
+                        for ev in events_in:
+                            key_xy = (ev[0], ev[1])
+                            if key_xy in evs_dict_xy.keys():
+                                evs_dict_xy[key_xy].append(ev.tolist())
+                            else:
+                                evs_dict_xy[key_xy] = [ev.tolist()]
+                            # polarity = ev[3]
+                            # if polarity == 1.0 and key_xy in pos_evs_dict_xy.keys():
+                            #     pos_evs_dict_xy[key_xy].append(ev.tolist())
+                            # elif polarity == -1.0 and key_xy in neg_evs_dict_xy.keys():
+                            #     neg_evs_dict_xy[key_xy].append(ev.tolist())
+                            # elif polarity == 1.0:
+                            #     pos_evs_dict_xy[key_xy] = [ev.tolist()]
+                            # elif polarity == -1.0:
+                            #     neg_evs_dict_xy[key_xy] = [ev.tolist()]      
+                            
 
-                    start = time.time()
-                    for ev in events_in:
-                        key_xy = (ev[0], ev[1])
-                        if key_xy in evs_dict_xy.keys():
-                            evs_dict_xy[key_xy].append(ev.tolist())
-                        else:
-                            evs_dict_xy[key_xy] = [ev.tolist()]
-                        # polarity = ev[3]
-                        # if polarity == 1.0 and key_xy in pos_evs_dict_xy.keys():
-                        #     pos_evs_dict_xy[key_xy].append(ev.tolist())
-                        # elif polarity == -1.0 and key_xy in neg_evs_dict_xy.keys():
-                        #     neg_evs_dict_xy[key_xy].append(ev.tolist())
-                        # elif polarity == 1.0:
-                        #     pos_evs_dict_xy[key_xy] = [ev.tolist()]
-                        # elif polarity == -1.0:
-                        #     neg_evs_dict_xy[key_xy] = [ev.tolist()]      
-                        
+                        if idx < 10 :
+                            pre_evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
 
-                    if idx < 10 :
-                        pre_evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
-
-                    evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
-                    # pos_evs_dict_xy = dict((k, v) for k, v in pos_evs_dict_xy.items() if len(v) > 1) 
-                    # neg_evs_dict_xy = dict((k, v) for k, v in neg_evs_dict_xy.items() if len(v) > 1) 
-                    x = np.arange(self.W)
-                    y = np.arange(self.H)
-                    no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
-                    no_evs_set = set(map(tuple, no_evs_pixels))
-                    evs_set = set(evs_dict_xy.keys())
-                    no_evs_set -= evs_set
-                    no_evs_pixels = np.array(list(no_evs_set))
-                    end = time.time()
-                    print("read events= {:0.5f}".format(end-start))
+                        evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
+                        # pos_evs_dict_xy = dict((k, v) for k, v in pos_evs_dict_xy.items() if len(v) > 1) 
+                        # neg_evs_dict_xy = dict((k, v) for k, v in neg_evs_dict_xy.items() if len(v) > 1) 
+                        x = np.arange(self.W)
+                        y = np.arange(self.H)
+                        no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
+                        no_evs_set = set(map(tuple, no_evs_pixels))
+                        evs_set = set(evs_dict_xy.keys())
+                        no_evs_set -= evs_set
+                        no_evs_pixels = np.array(list(no_evs_set))
+                        end = time.time()
+                        print("read events= {:0.5f}".format(end-start))
                 
                     for cam_iter in range(self.num_cam_iters):
                         estimated_correct_cam_trans = self.transNet.forward(idx_tensor).unsqueeze(0)
@@ -508,12 +510,13 @@ class Tracker(object):
                         estimated_correct_new_cam_c2w_homogeneous= torch.cat([estimated_correct_new_cam_c2w, bottom], dim=0)
                         compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
                         camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
-                    
-                        # loss_events = self.optimize_after_sampling_pixels(idx, estimated_new_cam_c2w, gt_c2w, camera_tensor,
-                        #                                               evs_dict_xy, pre_evs_dict_xy, gt_event_images, no_evs_pixels,
-                        #                                               pre_gt_color, pre_gt_depth,
-                        #                                               gt_color, gt_depth, gt_event,
-                        #                                               self.optim_quats_init, self.optim_trans_init)
+
+                        if self.event == True:
+                            loss_events = self.optimize_after_sampling_pixels(idx, estimated_new_cam_c2w, gt_c2w, camera_tensor,
+                                                                      evs_dict_xy, pre_evs_dict_xy, gt_event_images, no_evs_pixels,
+                                                                      pre_gt_color, pre_gt_depth,
+                                                                      gt_color, gt_depth, gt_event,
+                                                                      self.optim_quats_init, self.optim_trans_init)
 
                         loss_rgbd  = self.optimize_cam_rgbd(camera_tensor, gt_color, gt_depth, self.tracking_pixels,
                                                                 self.optim_quats_init, self.optim_trans_init)
@@ -522,10 +525,11 @@ class Tracker(object):
                         self.optim_trans_init.step()
                         self.optim_quats_init.zero_grad()
                         self.optim_trans_init.zero_grad()
-                        
-                        print("Event Loss", loss_events)
+                     
                         print(f"RGBD loss:{loss_rgbd}\n")
-
+                        if self.event == True:
+                            print("Event Loss", loss_events)
+                            loss_rgbd += loss_events
                         c2w = get_camera_from_tensor(camera_tensor)
                         loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)-camera_tensor).mean().item()
 
@@ -541,19 +545,32 @@ class Tracker(object):
                         if self.verbose:
                             if cam_iter == self.num_cam_iters-1:
                                     # wandb logging
-                                    dict_log = {
-                                        'Event loss' : loss_events,
-                                        #'Event loss improvement': initial_loss_event - loss_event,
-                                        'Camera error': loss_camera_tensor,
-                                        'Fixed camera error' : fixed_camera_error,
-                                        #'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
-                                        'Frame': idx,
-                                        'first element of gt quaternion' : gt_camera_tensor[0],
-                                        'first element of quaternion' : camera_tensor[0],
-                                        'first element of translation' : camera_tensor[4],
-                                        'first element of gt translation' : gt_camera_tensor[4]
-                                    }
-
+                                    if self.event == True:
+                                        dict_log = {
+                                            'Event loss' : loss_events,
+                                            #'Event loss improvement': initial_loss_event - loss_event,
+                                            'Camera error': loss_camera_tensor,
+                                            'Fixed camera error' : fixed_camera_error,
+                                            #'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
+                                            'Frame': idx,
+                                            'first element of gt quaternion' : gt_camera_tensor[0],
+                                            'first element of quaternion' : camera_tensor[0],
+                                            'first element of translation' : camera_tensor[4],
+                                            'first element of gt translation' : gt_camera_tensor[4]
+                                        }
+                                    else:
+                                        dict_log = {
+                                            #'Event loss' : loss_events,
+                                            #'Event loss improvement': initial_loss_event - loss_event,
+                                            'Camera error': loss_camera_tensor,
+                                            'Fixed camera error' : fixed_camera_error,
+                                            #'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
+                                            'Frame': idx,
+                                            'first element of gt quaternion' : gt_camera_tensor[0],
+                                            'first element of quaternion' : camera_tensor[0],
+                                            'first element of translation' : camera_tensor[4],
+                                            'first element of gt translation' : gt_camera_tensor[4]
+                                        }                                       
                                     self.experiment.log(dict_log)
 
                         

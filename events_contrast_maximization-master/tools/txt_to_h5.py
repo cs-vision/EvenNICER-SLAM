@@ -71,6 +71,7 @@ def extract_txt(txt_path, output_path, zero_timestamps=False,
     print("Detect sensor size [h={}, w={}]".format(sensor_size[0], sensor_size[1]))
     t0 = 0 if zero_timestamps else first_ts
     ep.add_metadata(total_num_pos, total_num_neg, last_ts-t0, t0, last_ts, num_imgs=0, num_flow=0, sensor_size=sensor_size)
+    os.remove(txt_path)
 
 
 def extract_txts(txt_paths, output_dir, zero_timestamps=False):
@@ -101,7 +102,7 @@ if __name__ == "__main__":
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("path", help="txt file to extract or directory containing txt files")
-    parser.add_argument("--output_dir", default="/tmp/extracted_data", help="Folder where to extract the data")
+    parser.add_argument("--output_dir", default="/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/Datasets/replica_gt_events/room2", help="Folder where to extract the data")
     parser.add_argument('--zero_timestamps', action='store_true', help='If true, timestamps will be offset to start at 0')
     args = parser.parse_args()
 
