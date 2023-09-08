@@ -9,6 +9,7 @@ from src.common import as_intrinsics_matrix
 from torch.utils.data import Dataset
 
 import h5py # change event dataformat
+import time
 
 def readEXR_onlydepth(filename):
     """
@@ -632,11 +633,19 @@ class Replica_event_txt(Replica):
         if event_path is not None : 
             #event_data = np.loadtxt(self.event_paths[index_event])
             event_data = self.read_h5_events(self.event_paths[index_event])
-
+            xs, ys, ts, ps = self.read_h5_event_components(self.event_paths[index_event])
         else:
             event_data = np.zeros((1, 4)) # dummy event
+            xs, ys, ts, ps = np.zeros(1), np.zeros(1), np.zeros(1), np.zeros(1)
         event_data = torch.from_numpy(event_data)
-        
+        xt, yt, tt, pt = torch.from_numpy(xs), torch.from_numpy(ys), torch.from_numpy(ts), torch.from_numpy(ps)
+        xt = xt.float().to(self.device)
+        yt = yt.float().to(self.device)
+        tt = (tt[:]-tt[0]).float().to(self.device)
+        pt = pt.float().to(self.device)
+    
+        event_image = self.events_to_image_torch(xt, yt, pt, self.device)
+
         if '.png' in depth_path:
             depth_data = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)
         elif '.exr' in depth_path:
@@ -675,12 +684,7 @@ class Replica_event_txt(Replica):
 
         pose = self.poses[index]
         pose[:3, 3] *= self.scale
-
-        pos_evs_dict_xy = {}
-        neg_evs_dict_xy = {}
-        evs_dict_xy = {}
-        
-        return index, color_data.to(self.device), depth_data.to(self.device), event_data.to(self.device), pose.to(self.device)
+        return index, color_data.to(self.device), depth_data.to(self.device), event_data.to(self.device), pose.to(self.device), event_image.to(self.device)
     
     def read_h5_events(self, hdf_path):
         """
@@ -693,6 +697,75 @@ class Replica_event_txt(Replica):
         else:
             events = np.stack((f['events/xs'][:], f['events/ys'][:], f['events/ts'][:], np.where(f['events/ps'][:], 1, -1)), axis=1)
         return events
+    
+    def read_h5_event_components(self, hdf_path):
+        """
+        Read events from HDF5 file. Return x,y,t,p components.
+        """
+        f = h5py.File(hdf_path, 'r')
+        if 'events/x' in f:
+            #legacy
+            return (f['events/x'][:], f['events/y'][:], f['events/ts'][:], np.where(f['events/p'][:], 1, -1))
+        else:
+            return (f['events/xs'][:], f['events/ys'][:], f['events/ts'][:], np.where(f['events/ps'][:], 1, -1))
+
+    def interpolate_to_image(self, pxs, pys, dxs, dys, weights, img):
+        """
+        Accumulate x and y coords to an image using bilinear interpolation
+        """
+        img.index_put_((pys,   pxs  ), weights*(1.0-dxs)*(1.0-dys), accumulate=True)
+        img.index_put_((pys,   pxs+1), weights*dxs*(1.0-dys), accumulate=True)
+        img.index_put_((pys+1, pxs  ), weights*(1.0-dxs)*dys, accumulate=True)
+        img.index_put_((pys+1, pxs+1), weights*dxs*dys, accumulate=True)
+        return img
+
+    def events_to_image_torch(self, xs, ys, ps,
+            device=None, sensor_size=(680, 1200), clip_out_of_range=True,
+            interpolation=None, padding=False):
+        """
+        Method to turn event tensor to image. Allows for bilinear interpolation.
+            :param xs: tensor of x coords of events
+            :param ys: tensor of y coords of events
+            :param ps: tensor of event polarities/weights
+            :param device: the device on which the image is. If none, set to events device
+            :param sensor_size: the size of the image sensor/output image
+            :param clip_out_of_range: if the events go beyond the desired image size,
+                clip the events to fit into the image
+            :param interpolation: which interpolation to use. Options=None,'bilinear'
+            :param padding if bilinear interpolation, allow padding the image by 1 to allow events to fit:
+        """
+        if device is None:
+            device = xs.device
+        if interpolation == 'bilinear' and padding:
+            img_size = (sensor_size[0]+1, sensor_size[1]+1)
+        else:
+            img_size = list(sensor_size)
+
+        mask = torch.ones(xs.size(), device=device)
+        if clip_out_of_range:
+            zero_v = torch.tensor([0.], device=device)
+            ones_v = torch.tensor([1.], device=device)
+            clipx = img_size[1] if interpolation is None and padding==False else img_size[1]-1
+            clipy = img_size[0] if interpolation is None and padding==False else img_size[0]-1
+            mask = torch.where(xs>=clipx, zero_v, ones_v)*torch.where(ys>=clipy, zero_v, ones_v)
+
+        img = torch.zeros(img_size).to(device)
+        if interpolation == 'bilinear' and xs.dtype is not torch.long and xs.dtype is not torch.long:
+            pxs = (xs.floor()).float()
+            pys = (ys.floor()).float()
+            dxs = (xs-pxs).float()
+            dys = (ys-pys).float()
+            pxs = (pxs*mask).long()
+            pys = (pys*mask).long()
+            masked_ps = ps.squeeze()*mask
+            self.interpolate_to_image(pxs, pys, dxs, dys, masked_ps, img)
+        else:
+            if xs.dtype is not torch.long:
+                xs = xs.long().to(device)
+            if ys.dtype is not torch.long:
+                ys = ys.long().to(device)
+                img.index_put_((ys, xs), ps, accumulate=True)
+        return img
 
 
 dataset_dict = {
