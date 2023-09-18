@@ -771,6 +771,8 @@ if __name__ == "__main__":
     events = read_h5_events(args.path)
     xs, ys, ts, ps = read_h5_event_components(args.path)
 
+    print(len(np.unique(ts)))
+
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     device = 'cpu'
@@ -832,7 +834,6 @@ if __name__ == "__main__":
     for i in range(test_loop):
         voxels = events_to_voxel_timesync_torch(xt, yt, tt, pt, bins, tt[s], tt[e])
     end = time.time()
-    print(voxels)
     print("voxel grid timesynced: time elapsed = {:0.5f}".format((end-start)/test_loop))
 
     # start = time.time()

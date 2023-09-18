@@ -50,7 +50,7 @@ class Mapper(object):
         self.device = cfg['mapping']['device']
         self.fix_fine = cfg['mapping']['fix_fine']
         self.eval_rec = cfg['meshing']['eval_rec']
-        self.BA = False  # Even if BA is enabled, it starts only when there are at least 4 keyframes
+        self.BA = True  # Even if BA is enabled, it starts only when there are at least 4 keyframes
         self.BA_cam_lr = cfg['mapping']['BA_cam_lr']
         self.mesh_freq = cfg['mapping']['mesh_freq']
         self.ckpt_freq = cfg['mapping']['ckpt_freq']
