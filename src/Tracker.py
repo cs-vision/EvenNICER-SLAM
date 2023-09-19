@@ -98,7 +98,7 @@ class Tracker(object):
         # NOTE :event
         self.event = True
 
-    def init_posenet_train(self, scale=0.1):
+    def init_posenet_train(self, scale=0.5):
         self.optim_trans_init = torch.optim.Adam([dict(params=self.transNet.parameters(), lr = self.cam_lr*1*scale)])
         self.optim_quats_init = torch.optim.Adam([dict(params=self.quatsNet.parameters() , lr = self.cam_lr*0.2*scale)])
 
@@ -224,8 +224,6 @@ class Tracker(object):
             selected_indices = np.random.choice(indices, size=N_evs, replace=True)
         sampled_xys =  xys_mtNevs[selected_indices]
         sampled_xys = [tuple(row) for row in sampled_xys]
-        # num_pos_evs_at_xy = np.asarray([len(pos_evs_dict_xy.get(xy, [])) for xy in sampled_xys])
-        # num_neg_evs_at_xy = np.asarray([len(neg_evs_dict_xy.get(xy, [])) for xy in sampled_xys])
        
         sampled_tensor = torch.tensor(sampled_xys).view(N_evs, -1).to(device)
         i_tensor = sampled_tensor[:, 0].long()
@@ -247,8 +245,8 @@ class Tracker(object):
                 events_pre_time_stamps = []
                 events_pre_time_stamps.append([item[2] for item in pre_evs_dict_xy[xy]])
                 events_pre_last_time.append(events_pre_time_stamps[0][-1])
-            elif idx >= 10:
-                events_pre_last_time.append((idx-10)/self.fps)
+            else:
+                events_pre_last_time.append((5*((idx-6)/5))/self.fps)
 
         events_last_time = torch.tensor(events_last_time, dtype=torch.float32).reshape(N_evs, -1).to(device)
         events_first_time = torch.tensor(events_first_time, dtype=torch.float32).reshape(N_evs, -1).to(device)
@@ -286,7 +284,10 @@ class Tracker(object):
         print(loss_events.item())
     
         loss_events = loss_events*0.025
-        loss_events.backward(retain_graph = True)
+        if idx % 5 != 0:
+            loss_events.backward(retain_graph = False)
+        else:
+            loss_events.backward(retain_graph = True)
         return loss_events.item()
 
     def optimize_cam_rgbd(self, camera_tensor, gt_color, gt_depth, batch_size, optim_quats_init, optim_trans_init):
@@ -429,9 +430,7 @@ class Tracker(object):
                     
                 gt_camera_tensor = get_tensor_from_camera(gt_c2w)
                 gt_camera_quad = gt_camera_tensor[:4].to(device)
-                #print(gt_camera_quad)
                 gt_camera_trans = gt_camera_tensor[4:].to(device)
-                #print(gt_camera_trans)
 
                 self.init_posenet_train()
                 idx_tensor = torch.tensor(idx).unsqueeze(0).to(device)
@@ -452,8 +451,7 @@ class Tracker(object):
                     self.optim_trans_init.zero_grad()
                     self.optim_quats_init.zero_grad()
             
-                # print(gt_camera_quad)
-                # print(estimated_new_cam_quad)
+                evs_dict_xy_integrate = {}
 
             
             else:
@@ -485,41 +483,98 @@ class Tracker(object):
                 print(initial_loss_camera_tensor)
                 candidate_cam_tensor = camera_tensor.clone().detach()
                 current_min_loss = 100000000000.
-                # NOTE : accumulate event 
-                gt_event_integrate = torch.cat((gt_event_integrate, gt_event), dim = 0)
+
                 gt_event_images += gt_event_image
 
+                every_event_backward = True
+                if every_event_backward == True and idx % 5 != 0:
+                    events_in = gt_event.cpu().numpy()
+                    for ev in events_in:
+                        key_xy = (ev[0], ev[1])
+                        if key_xy in evs_dict_xy_integrate.keys():
+                            evs_dict_xy_integrate[key_xy].append(ev.tolist())
+                        else:
+                            evs_dict_xy_integrate[key_xy] = [ev.tolist()]
+
+                    evs_dict_xy_integrate = dict((k, v) for k, v in evs_dict_xy_integrate.items() if len(v) > 1)    
+                    x = np.arange(self.W)
+                    y = np.arange(self.H)
+                    no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
+                    no_evs_set = set(map(tuple, no_evs_pixels))
+                    evs_set = set(evs_dict_xy_integrate.keys())
+                    no_evs_set -= evs_set
+                    no_evs_pixels = np.array(list(no_evs_set))
+
+                    for cam_iter in range(self.num_cam_iters):
+                        estimated_correct_cam_trans = self.transNet.forward(idx_tensor).unsqueeze(0)
+                        estimated_new_cam_quad = self.quatsNet.forward(idx_tensor).unsqueeze(0)
+                        estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad)
+                        estimated_correct_new_cam_c2w = torch.concat([estimated_correct_cam_rots, estimated_correct_cam_trans[...,None] ],dim=-1).squeeze()
+                        bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape([1, 4])).type(torch.float32).to(device)
+                        estimated_correct_new_cam_c2w_homogeneous= torch.cat([estimated_correct_new_cam_c2w, bottom], dim=0)
+                        camera_tensor = get_tensor_from_camera_in_pytorch(estimated_correct_new_cam_c2w)
+                        print(camera_tensor)
+                        print(gt_camera_tensor)
+
+                        
+                        loss_events = self.optimize_after_sampling_pixels(idx, estimated_new_cam_c2w, gt_c2w, camera_tensor,
+                                                                      evs_dict_xy_integrate, pre_evs_dict_xy, gt_event_images, no_evs_pixels,
+                                                                      pre_gt_color, pre_gt_depth,
+                                                                      gt_color, gt_depth, gt_event,
+                                                                      self.optim_quats_init, self.optim_trans_init)
+                        self.optim_quats_init.step()
+                        self.optim_trans_init.step()
+                        self.optim_quats_init.zero_grad()
+                        self.optim_trans_init.zero_grad()
+                     
+                        print("Event Loss", loss_events)
+                        c2w = get_camera_from_tensor(camera_tensor)
+                        loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)-camera_tensor).mean().item()
+
+                        fixed_camera_tensor = camera_tensor.clone().detach()
+                        if camera_tensor[0] < 0:
+                            fixed_camera_tensor[:4] *= -1
+                        fixed_camera_error = torch.abs(gt_camera_tensor.to(device)- fixed_camera_tensor).mean().item()
+                
+                        print(f"camera tensor error: {loss_camera_tensor}\n")
+                        print(f"camera tensor: {camera_tensor}\n")
+                        if loss_events < current_min_loss:
+                            current_min_loss = loss_events
+                            candidate_cam_tensor = camera_tensor.clone().detach()
+                            if not self.use_last:
+                                candidate_transNet_para = self.transNet.state_dict()
+                                candidate_quatsNet_para = self.quatsNet.state_dict()
+
+                    bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape(
+                                [1, 4])).type(torch.float32).to(self.device)
+                    print("candidate_cam_tensor:", candidate_cam_tensor)
+                    if self.use_last:
+                        c2w = get_camera_from_tensor(
+                                camera_tensor.clone().detach()
+                        )
+                        c2w = torch.cat([c2w, bottom], dim=0)
+                    else:
+                        c2w = get_camera_from_tensor(
+                                candidate_cam_tensor.clone().detach()
+                            )
+                        c2w = torch.cat([c2w, bottom], dim=0)   
+
+                        self.transNet.load_state_dict(candidate_transNet_para)
+                        self.quatsNet.load_state_dict(candidate_quatsNet_para)
+
+                        del candidate_transNet_para
+                        del candidate_quatsNet_para    
+                                          
                 if idx % 5 == 0:
-                    events_in = gt_event_integrate.cpu().numpy()
-                    # pos_evs_dict_xy = {}
-                    # neg_evs_dict_xy = {}
-                    evs_dict_xy = {}
 
                     if self.event == True:
             
-                        for ev in events_in:
-                            key_xy = (ev[0], ev[1])
-                            if key_xy in evs_dict_xy.keys():
-                                evs_dict_xy[key_xy].append(ev.tolist())
-                            else:
-                                evs_dict_xy[key_xy] = [ev.tolist()]
-                            # polarity = ev[3]
-                            # if polarity == 1.0 and key_xy in pos_evs_dict_xy.keys():
-                            #     pos_evs_dict_xy[key_xy].append(ev.tolist())
-                            # elif polarity == -1.0 and key_xy in neg_evs_dict_xy.keys():
-                            #     neg_evs_dict_xy[key_xy].append(ev.tolist())
-                            # elif polarity == 1.0:
-                            #     pos_evs_dict_xy[key_xy] = [ev.tolist()]
-                            # elif polarity == -1.0:
-                            #     neg_evs_dict_xy[key_xy] = [ev.tolist()]      
-                            
+
 
                         if idx < 10 :
-                            pre_evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
+                            pre_evs_dict_xy = dict((k, v) for k, v in evs_dict_xy_integrate.items() if len(v) > 1) 
 
-                        evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
-                        # pos_evs_dict_xy = dict((k, v) for k, v in pos_evs_dict_xy.items() if len(v) > 1) 
-                        # neg_evs_dict_xy = dict((k, v) for k, v in neg_evs_dict_xy.items() if len(v) > 1) 
+                        evs_dict_xy = dict((k, v) for k, v in evs_dict_xy_integrate.items() if len(v) > 1) 
                         x = np.arange(self.W)
                         y = np.arange(self.H)
                         no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
@@ -647,5 +702,8 @@ class Tracker(object):
                 # NOTE : insert dummy event
                 gt_event_integrate = torch.tensor([0, 0, 0, 0]).unsqueeze(0).to(device)
                 gt_event_images = torch.zeros_like(gt_event_image)
-                if idx >= 5:
-                    pre_evs_dict_xy = dict(evs_dict_xy)
+                pre_evs_dict_xy = dict(evs_dict_xy_integrate)
+                evs_dict_xy_integrate = {}
+
+    
+                
