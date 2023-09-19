@@ -164,9 +164,9 @@ class Tracker(object):
         bottoms = torch.stack([bottom]*idx.shape[0])
         estimated_cam_c2w_homogeneous = torch.cat([estimated_cam_c2w, bottoms], dim=1)
         estimated_c2w = torch.matmul(pre_c2w, estimated_cam_c2w_homogeneous)[:, :3, :]
-        estimated_c2w_new = torch.matmul(estimated_cam_c2w_homogeneous, pre_c2w)[:, :3, :]
-        estimated_tensor = get_tensor_from_camera_in_pytorch(estimated_c2w_new)
-        return estimated_c2w_new, estimated_tensor
+        #estimated_c2w_new = torch.matmul(estimated_cam_c2w_homogeneous, pre_c2w)[:, :3, :]
+        estimated_tensor = get_tensor_from_camera_in_pytorch(estimated_c2w)
+        return estimated_c2w, estimated_tensor
     
     def get_event_rays(self, idx_tensor, i, j, time, pre_c2w, H, W, fx, fy, cx, cy, device, fix=False):
         idx = time*self.fps
@@ -450,11 +450,11 @@ class Tracker(object):
                 estimated_correct_new_cam_c2w = torch.concat([estimated_correct_cam_rots, estimated_correct_cam_trans[...,None] ],dim=-1).squeeze()
                 bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape([1, 4])).type(torch.float32).to(device)
                 estimated_correct_new_cam_c2w_homogeneous = torch.cat([estimated_correct_new_cam_c2w, bottom], dim=0)
-                #compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
+                compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
                 #print(compose_pose)
-                compose_pose_new = torch.matmul(estimated_correct_new_cam_c2w_homogeneous, estimated_new_cam_c2w)[:3, :]
+                #compose_pose_new = torch.matmul(estimated_correct_new_cam_c2w_homogeneous, estimated_new_cam_c2w)[:3, :]
                 #print(compose_pose_new)
-                camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose_new)
+                camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
 
                 initial_loss_camera_tensor = torch.abs(
                     gt_camera_tensor.to(device)-camera_tensor).mean().item()
@@ -513,8 +513,8 @@ class Tracker(object):
                         bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape([1, 4])).type(torch.float32).to(device)
                         estimated_correct_new_cam_c2w_homogeneous= torch.cat([estimated_correct_new_cam_c2w, bottom], dim=0)
                         compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
-                        compose_pose_new = torch.matmul(estimated_correct_new_cam_c2w_homogeneous, estimated_new_cam_c2w)[:3, :]
-                        camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose_new)
+                        #compose_pose_new = torch.matmul(estimated_correct_new_cam_c2w_homogeneous, estimated_new_cam_c2w)[:3, :]
+                        camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
 
                         if self.event == True:
                             loss_events = self.optimize_after_sampling_pixels(idx, estimated_new_cam_c2w, gt_c2w, camera_tensor,
