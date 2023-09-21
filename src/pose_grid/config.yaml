@@ -1,0 +1,4 @@
+PoseNet_freq: 5
+layers_feat: [null, 256, 256, 256, 256, 256, 256, 256, 256]
+skip: [4]
+positional_encoding: True # slightly better with PE

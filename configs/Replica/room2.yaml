@@ -7,3 +7,6 @@ data:
   output: output/Replica/room2
   # event folder
   event_folder: Datasets/replica_gt_png/room2
+PoseGrid:
+  zeropose_encoding: pretrained/room2_zeropose_encoding.npy
+  boxing_scales: [0.28985507, 0.33613445, 0.37735849]

@@ -44,3 +44,5 @@ cam:
   cy: 339.5
   png_depth_scale: 6553.5 #for depth image in png format
   crop_edge: 0
+PoseGrid:
+  encoding_interval: 2

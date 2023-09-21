@@ -121,3 +121,21 @@ Pose_Net:
   min_time : 0
   max_time : 1999
   layers_feat : [None,256,256,256,256,256,256,256,256]
+
+PoseGrid:
+  PoseNet_freq: 5
+  layers_feat: [null, 256, 256, 256, 256, 256, 256, 256, 256]
+  skip: [4]
+  positional_encoding: True # slightly better with PE
+  pretrained_decoder: pretrained/posedecoder_withPE_onlyBx_epoch_49.pt
+  pretrained_B: pretrained/pretrained_B.npy
+  only_Bx: True # use Bx also as By & Bz for its expressiveness
+  fix_decoder: True
+  fit_poses: True # let PoseGrid learn the gt poses directly. Only for debugging
+  decoder_lr: 0.001
+  # pose_enc_lr: 0.005
+  trans_enc_lr: 0.005
+  quat_enc_lr: 0.001
+  # prime_lr: 0.01
+  trans_prime_lr: 0.01
+  quat_prime_lr: 0.002

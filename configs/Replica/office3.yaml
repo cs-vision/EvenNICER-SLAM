@@ -7,3 +7,6 @@ data:
   output: output/Replica/office3
   # event folder
   event_folder: Datasets/replica_gt_png/office3
+PoseGrid:
+  zeropose_encoding: pretrained/office3_zeropose_encoding.npy
+  boxing_scales: [0.33898305, 0.32258065, 0.63492063]
