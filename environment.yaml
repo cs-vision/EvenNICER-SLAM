@@ -1,4 +1,4 @@
-name: evennicer-slam
+name: evennicer-slam_new
 channels:
   - pytorch
   - conda-forge

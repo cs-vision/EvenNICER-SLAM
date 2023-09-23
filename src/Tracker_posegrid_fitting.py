@@ -118,7 +118,7 @@ class Tracker(object):
     def posegrid_init(self, cfg):
         self.encoding_interval = cfg['PoseGrid']['encoding_interval']
         self.encoding_dim = 199 # 32*6 + 7, 32 each DoF, 7 for translation & quaternion prime
-        self.n_encoding = np.ceil(self.n_img / self.encoding_interval) + 1 # make sure the first and the last frame has its encoding
+        self.n_encoding = int(np.ceil(self.n_img / self.encoding_interval) + 1) # make sure the first and the last frame has its encoding
         self.posegrid = torch.cat([self.zeropose_encoding, torch.zeros(7)]).view(self.encoding_dim, 1).repeat(1, self.n_encoding) # (self.encoding_dim, self.n_encoding)
     
     def optimize_cam_in_batch(self, camera_tensor, gt_color, gt_depth, batch_size, optim_quats_init, optim_trans_init):
@@ -223,6 +223,7 @@ class Tracker(object):
     def run(self):
         device = self.device
 
+        cfg = self.cfg
         self.fix_decoder = cfg['PoseGrid']['fix_decoder']
         self.min_locs = self.bound[:, 0]
         self.boxing_scales = torch.from_numpy(np.array(cfg['PoseGrid']['boxing_scales']))
@@ -262,7 +263,7 @@ class Tracker(object):
             # indices for the encodings
             _ = idx/self.encoding_interval
             idx_enc_prev, idx_enc_next = int(torch.floor(_)), int(torch.ceil(_))
-            idx_enc_prev_slam, idx_enc_next_slam = idx_enc_prev*self.encoding_interval, idx_enc_next*self.encoding_interval
+            idx_enc_prev_slam, idx_enc_next_slam = torch.tensor(idx_enc_prev*self.encoding_interval), torch.tensor(idx_enc_next*self.encoding_interval)
 
             if self.sync_method == 'strict':
                 # strictly mapping and then tracking
@@ -313,10 +314,10 @@ class Tracker(object):
                 # compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
                 # camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
                 t = torch.tensor(idx).unsqueeze(0).to(device)
-                t1, t2 = idx_enc_prev_slam.unsqueeze(0).to(device), idx_enc_next_slam.unsqueeze(0).to(device)
+                t1, t2 = idx_enc_prev_slam.to(device), idx_enc_next_slam.to(device)
                 enc1, enc2 = self.posegrid[:, idx_enc_prev].clone().to(device), self.posegrid[:, idx_enc_next].clone().to(device)
-                pose_enc1, pose_enc2 = enc1[:-7], enc2[:-7]
-                prime1, prime2 = enc1[-7:], enc2[-7:]
+                pose_enc1, pose_enc2 = enc1[None, :-7], enc2[None, :-7]
+                prime1, prime2 = enc1[None, -7:], enc2[None, -7:]
                 with torch.no_grad():
                     pred_trans, pred_quat = self.pose_decoder.forward(t, t1, t2, pose_enc1, pose_enc2, prime1, prime2)
                     pred_trans_unboxed = pred_trans / self.boxing_scales + self.min_locs

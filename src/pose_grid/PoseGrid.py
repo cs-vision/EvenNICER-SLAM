@@ -2,7 +2,7 @@ import numpy as np
 import torch 
 import torch.nn.functional as F
 from scipy.spatial.transform import Rotation as R
-import wandb
+# import wandb
 
 # TODO: unoffset and unscale (0.1?, but probly not because the decoder is supervised with real scale) the predicted translation as post processing
 # maybe do it outside the model
@@ -12,23 +12,24 @@ class PoseGrid_decoder(torch.nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.pe = config['positional_encoding']
+        self.pe = config['PoseGrid']['positional_encoding']
         if self.pe:
-            self.input_t_dim = config['PoseNet_freq'] * 2 + 96
+            self.input_t_dim = config['PoseGrid']['PoseNet_freq'] * 2 + 96
         else:
             self.input_t_dim = 96
         self.define_network(config)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = config['tracking']['device']
 
     def define_network(self, config):
-        layers_list = config['layers_feat']  
+        layers_list = config['PoseGrid']['layers_feat']  
         L = list(zip(layers_list[:-1], layers_list[1:]))  
 
         # init TransNet
         self.mlp_transNet = torch.nn.ModuleList()
         for li, (k_in, k_out) in enumerate(L):
             if li == 0: k_in = self.input_t_dim
-            if li in self.config['skip']: k_in += self.input_t_dim
+            if li in self.config['PoseGrid']['skip']: k_in += self.input_t_dim
             if li == len(L) - 1: k_out = 3
             linear = torch.nn.Linear(k_in, k_out)
             self.mlp_transNet.append(linear)
@@ -37,7 +38,7 @@ class PoseGrid_decoder(torch.nn.Module):
         self.mlp_quatsNet = torch.nn.ModuleList()
         for li, (k_in, k_out) in enumerate(L):
             if li == 0: k_in = self.input_t_dim
-            if li in self.config['skip']: k_in += self.input_t_dim
+            if li in self.config['PoseGrid']['skip']: k_in += self.input_t_dim
             if li == len(L) - 1: k_out = 4
             linear = torch.nn.Linear(k_in, k_out)
             self.mlp_quatsNet.append(linear)     
@@ -47,7 +48,7 @@ class PoseGrid_decoder(torch.nn.Module):
         alpha = self.normalize_time(input_time, t1, t2)
         if self.pe:
             normalized_time = 2 * alpha - 1
-            encoding_time = self.positional_encoding(normalized_time.unsqueeze(-1), L=self.config['PoseNet_freq'])
+            encoding_time = self.positional_encoding(normalized_time.unsqueeze(-1), L=self.config['PoseGrid']['PoseNet_freq'])
             input_trans1 = torch.cat([pose_encoding1[:, :96], encoding_time], dim=-1)
             input_quat1 = torch.cat([pose_encoding1[:, 96:], encoding_time], dim=-1)
             input_trans2 = torch.cat([pose_encoding2[:, :96], encoding_time], dim=-1)
@@ -94,7 +95,7 @@ class PoseGrid_decoder(torch.nn.Module):
     def forward_transNet(self, trans_input):
         translation_feat = trans_input
         for li, layer in enumerate(self.mlp_transNet):
-            if li in self.config['skip']: translation_feat = torch.cat([translation_feat, trans_input],dim=-1)
+            if li in self.config['PoseGrid']['skip']: translation_feat = torch.cat([translation_feat, trans_input],dim=-1)
             translation_feat = layer(translation_feat)
             if li==len(self.mlp_transNet)-1:
                 # last layer
@@ -106,7 +107,7 @@ class PoseGrid_decoder(torch.nn.Module):
     def forward_quatsNet(self, rot_input):
         rotation_feat = rot_input
         for li, layer in enumerate(self.mlp_quatsNet):
-            if li in self.config['skip']: rotation_feat = torch.cat([rotation_feat, rot_input],dim=-1)
+            if li in self.config['PoseGrid']['skip']: rotation_feat = torch.cat([rotation_feat, rot_input],dim=-1)
             rotation_feat = layer(rotation_feat)
             if li==len(self.mlp_quatsNet)-1:
                 # last layer

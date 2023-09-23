@@ -1,5 +1,6 @@
 coarse: True
-sync_method: strict
+# sync_method: strict
+sync_method: free # for debugging
 scale: 1
 verbose: True
 occupancy: True
