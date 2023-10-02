@@ -9,4 +9,5 @@ data:
   event_folder: Datasets/replica_gt_png/room0
 PoseGrid:
   zeropose_encoding: pretrained/room0_zeropose_encoding.npy
+  startpose_encoding: pretrained/room0_startpose_encoding.npy
   boxing_scales: [0.33898305, 0.45977011, 0.58823529]

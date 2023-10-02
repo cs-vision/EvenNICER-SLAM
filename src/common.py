@@ -310,6 +310,7 @@ def get_tensor_from_camera(RT, Tquad=False):
     from mathutils import Matrix
     R, T = RT[:3, :3], RT[:3, 3]
     rot = Matrix(R)
+    # it is in wxyz order
     quad = rot.to_quaternion()
     if Tquad:
         tensor = np.concatenate([T, quad], 0)

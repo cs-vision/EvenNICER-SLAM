@@ -17,9 +17,8 @@ class PoseGrid_decoder(torch.nn.Module):
             self.input_t_dim = config['PoseGrid']['PoseNet_freq'] * 2 + 96
         else:
             self.input_t_dim = 96
+        self.device = self.config['tracking']['device']
         self.define_network(config)
-        # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.device = config['tracking']['device']
 
     def define_network(self, config):
         layers_list = config['PoseGrid']['layers_feat']  
@@ -41,7 +40,11 @@ class PoseGrid_decoder(torch.nn.Module):
             if li in self.config['PoseGrid']['skip']: k_in += self.input_t_dim
             if li == len(L) - 1: k_out = 4
             linear = torch.nn.Linear(k_in, k_out)
-            self.mlp_quatsNet.append(linear)     
+            self.mlp_quatsNet.append(linear)   
+
+        # to cuda
+        self.mlp_transNet = self.mlp_transNet.to(self.device)  
+        self.mlp_quatsNet = self.mlp_quatsNet.to(self.device)
 
     def forward(self, input_time, t1, t2, pose_encoding1, pose_encoding2, velocity1, velocity2):
         # Compute positional encoding with respect to t1 and t2 for input_time
@@ -226,8 +229,9 @@ class PoseGrid_decoder(torch.nn.Module):
                 powers = powers.to(self.device)
                 powers[not_check] = self.quat_exp(n[not_check].unsqueeze(-1) * self.quat_log(q[not_check, :]))
         else:
-            powers = powers.to(self.device)
-            powers = self.quat_exp(n.unsqueeze(-1) * self.quat_log(q))
+            # powers = powers.to(self.device)
+            # powers = self.quat_exp(n.unsqueeze(-1) * self.quat_log(q))
+            powers = self.quat_exp(n.unsqueeze(-1) * self.quat_log(q)).to(self.device)
 
         return powers
 

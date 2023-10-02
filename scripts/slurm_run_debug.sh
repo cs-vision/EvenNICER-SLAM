@@ -22,7 +22,7 @@ dataset=${datasets[0]}
 scene_name="room0"
 
 # Edit this to distinguish different configs
-run_suffix="frame_wise_PoseNet"
+run_suffix="frame_wise_posegridevery1_quatnormalized_gtwxyz_startquatfixed_randomlypretrained_rmsprop"
 
 # Run single or array job
 if [ -z "$SLURM_ARRAY_TASK_ID" ]; then
