@@ -18,6 +18,9 @@ from src.utils.Visualizer import Visualizer
 # PoseGrid
 from src.pose_grid import PoseGrid_decoder
 import transforms3d.euler as txe
+import matplotlib.pyplot as plt
+import seaborn as sns
+import wandb
 
 
 class Tracker(object):
@@ -213,7 +216,7 @@ class Tracker(object):
     def get_M(self, B, a):
         B_re = torch.unsqueeze(B, 0)
         a_re = a.view(-1, 1, 1)
-        M = torch.unsqueeze(torch.eye(self.hidden_dim), 0) + B_re * a_re + torch.matmul(B_re, B_re) * (a_re ** 2) / 2
+        M = torch.unsqueeze(torch.eye(self.hidden_dim), 0).to(self.device) + B_re * a_re + torch.matmul(B_re, B_re) * (a_re ** 2) / 2
         return M
 
     def motion_model(self, M, base_enc):
@@ -286,9 +289,9 @@ class Tracker(object):
             self.update_para_from_mapping()
 
             if self.verbose:
-                print(Fore.MAGENTA)
+                # print(Fore.MAGENTA)
                 print("Tracking Frame ",  idx.item())
-                print(Style.RESET_ALL)
+                # print(Style.RESET_ALL)
 
             if idx == 0 or self.gt_camera:
                 c2w = gt_c2w
@@ -331,10 +334,10 @@ class Tracker(object):
                     pred_rot = quad2rotation(pred_quat)
                     pred_c2w = torch.cat([pred_rot, pred_trans_unboxed[..., None]], dim=-1).squeeze()
                     pred_c2w_homo = torch.cat([pred_c2w, torch.tensor([[0,0,0,1]], device=device)], dim=0)
-                    camera_tensor = get_tensor_from_camera_in_pytorch(pred_c2w_homo)
+                    camera_tensor_init = get_tensor_from_camera_in_pytorch(pred_c2w_homo)
 
                 initial_loss_camera_tensor = torch.abs(
-                    gt_camera_tensor.to(device)- camera_tensor).mean().item()
+                    gt_camera_tensor.to(device)- camera_tensor_init).mean().item()
 
                 # specify trainable variables
                 trans_enc1, trans_enc2 = pose_enc1[:96], pose_enc2[:96]
@@ -358,8 +361,8 @@ class Tracker(object):
                     decoder_para_list += list(self.pose_decoder.parameters())
                 
                 # set up optimizer
-                optimizer = torch.optim.RMSprop([{'params': decoder_para_list, 'lr': 0},
-                # optimizer = torch.optim.Adam([{'params': decoder_para_list, 'lr': 0},
+                # optimizer = torch.optim.RMSprop([{'params': decoder_para_list, 'lr': 0},
+                optimizer = torch.optim.Adam([{'params': decoder_para_list, 'lr': 0},
                                             #   {'params': pose_enc_para_list, 'lr': 0},
                                               {'params': trans_enc_para_list, 'lr': 0},
                                               {'params': quat_enc_para_list, 'lr': 0},
@@ -382,7 +385,7 @@ class Tracker(object):
                     # if self.seperate_LR:
                     #     camera_tensor = torch.cat([quad, T], 0).to(self.device)
                     self.visualizer.vis(
-                        idx, cam_iter, gt_depth, gt_color, camera_tensor, self.c, self.decoders)
+                        idx, cam_iter, gt_depth, gt_color, camera_tensor_init, self.c, self.decoders)
 
                     # optimizer.zero_grad()
 
@@ -446,21 +449,35 @@ class Tracker(object):
                                 'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
                                 'Frame': idx,
                                 'pred quat w' : camera_tensor[0], 
+                                'init quat w' : camera_tensor_init[0], 
                                 'gt quat w' : gt_camera_tensor[0],
                                 'pred quat x' : camera_tensor[1], 
+                                'init quat x' : camera_tensor_init[1], 
                                 'gt quat x' : gt_camera_tensor[1],
                                 'pred quat y' : camera_tensor[2], 
+                                'init quat y' : camera_tensor_init[2], 
                                 'gt quat y' : gt_camera_tensor[2],
                                 'pred quat z' : camera_tensor[3], 
+                                'init quat z' : camera_tensor_init[3], 
                                 'gt quat z' : gt_camera_tensor[3],
                                 'pred trans x' : camera_tensor[4],
+                                'init trans x' : camera_tensor_init[4], 
                                 'gt trans x' : gt_camera_tensor[4],
                                 'pred trans y' : camera_tensor[5],
+                                'init trans y' : camera_tensor_init[5],
                                 'gt trans y' : gt_camera_tensor[5],
                                 'pred trans z' : camera_tensor[6],
+                                'init trans z' : camera_tensor_init[6],
                                 'gt trans z' : gt_camera_tensor[6]
                                 }
                             self.experiment.log(dict_log)
+
+                            # TODO: add a visualization of posegrid
+                            plt.figure(figsize=(10, 8))
+                            sns.heatmap(self.posegrid, cmap='viridis', linewidths=.5)
+                            plt.savefig('current_posegrid.png')
+                            self.experiment.log({"posegrid": wandb.Image('current_posegrid.png')})
+                            plt.close()
         
                     if loss < current_min_loss:
                         candidate_idx = cam_iter
@@ -529,21 +546,14 @@ class Tracker(object):
             pre_c2w = c2w.clone()
             self.idx[0] = idx
 
-            # if self.const_speed_assumption and idx-2 >= 0:
-            #     pre_c2w = pre_c2w.float()
-            #     delta = pre_c2w@self.estimate_c2w_list[idx-2].to(
-            #         device).float().inverse()
-            #     estimated_new_cam_c2w = delta@pre_c2w
-            # else:
-            #     estimated_new_cam_c2w = pre_c2w
-
             # TODO: constant speed assumption after optimizing grid point encoding
-            if self.const_speed_assumption and idx_enc_prev == idx_enc_next:
+            print(f'idx_enc_prev: {idx_enc_prev}, idx_enc_next: {idx_enc_next}, is equal: {idx_enc_prev == idx_enc_next}')
+            if self.const_speed_assumption and idx_enc_prev == idx_enc_next and not idx == 0:
                 print("Is doing constant speed assumption!!!!!")
                 with torch.no_grad():
-                    pose_enc_now = self.posegrid[:-7, idx_enc_next]
-                    prime_now = self.posegrid[-7:, idx_enc_next]
-                    delta = prime_now * self.encoding_interval
+                    pose_enc_now = self.posegrid[:-7, idx_enc_next].clone().to(device)
+                    prime_now = self.posegrid[-7:, idx_enc_next].clone().to(device)
+                    delta = (prime_now * self.encoding_interval)
                     delta_trans = delta[:3]
                     delta_quat = delta[3:]
 
@@ -553,10 +563,11 @@ class Tracker(object):
                     quat_next = F.normalize(quat_next, p=2, dim=-1)
 
                     # NOTE: zero rotation (0, 0, 0) is mapped to (pi, pi/2, pi) for encoding, the following real world Euler angles are bounded by (+-pi, +-pi/2, +-pi)
-                    theta_now, phi_now, gamma_now = txe.quat2euler(quat_now)
-                    theta_next, phi_next, gamma_next = txe.quat2euler(quat_next)
+                    theta_now, phi_now, gamma_now = txe.quat2euler(quat_now.squeeze().cpu())
+                    theta_next, phi_next, gamma_next = txe.quat2euler(quat_next.squeeze().cpu())
                     delta_euler = torch.tensor([theta_next-theta_now, phi_next-phi_now, gamma_next-gamma_now])
                     delta_euler /= np.pi/1.8 # need to rescale like this to use B
+                    delta_euler = delta_euler.to(device)
 
                     # get a good initialization of the next encodings using pretrained B's
                     delta_transeuler = torch.cat([delta_trans, delta_euler], dim=-1)
@@ -565,8 +576,8 @@ class Tracker(object):
                     n_dof = 6
                     for dof in range(n_dof):
                         pose_enc_dof = pose_enc_now[dof*self.hidden_dim:(dof+1)*self.hidden_dim]
-                        pose_enc_new.append(self.rotate_by_B(pose_enc_dof, delta_transeuler[dof], B_list[dof]))
-                    pose_enc_new = torch.cat(pose_enc_new, dim=-1)
+                        pose_enc_new.append(self.rotate_by_B(pose_enc_dof, delta_transeuler[dof], B_list[dof].to(device)))
+                    pose_enc_new = torch.cat(pose_enc_new, dim=-1).squeeze()
                     prime_new = prime_now
                     enc_new = torch.cat([pose_enc_new, prime_new], dim=-1)
                     self.posegrid[:, idx_enc_next+1] = enc_new.clone()

@@ -35,7 +35,8 @@ tracking:
   vis_inside_freq: 25
   w_color_loss: 0.5
   seperate_LR: False
-  const_speed_assumption: False
+  # const_speed_assumption: False
+  const_speed_assumption: True
   no_vis_on_first_frame: True
   gt_camera: False
   lr: 0.001
