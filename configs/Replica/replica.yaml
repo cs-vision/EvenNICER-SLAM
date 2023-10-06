@@ -47,3 +47,5 @@ cam:
   crop_edge: 0
 PoseGrid:
   encoding_interval: 1
+  learn_prime: False
+  len_avg_prime: 5 # number of averaged previous poses as prime, if learn_prime = False. must be integers greater than 2

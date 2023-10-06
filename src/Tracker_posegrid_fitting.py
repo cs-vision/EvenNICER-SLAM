@@ -61,7 +61,9 @@ class Tracker(object):
         self.handle_dynamic = cfg['tracking']['handle_dynamic']
         self.use_color_in_tracking = cfg['tracking']['use_color_in_tracking']
         self.const_speed_assumption = cfg['tracking']['const_speed_assumption']
-        self.learn_prime = False # TODO: make this in config if works
+        self.learn_prime = cfg['PoseGrid']['learn_prime']
+        if not self.learn_prime:
+            self.len_avg_prime = cfg['PoseGrid']['len_avg_prime']
 
         self.every_frame = cfg['mapping']['every_frame']
         self.no_vis_on_first_frame = cfg['mapping']['no_vis_on_first_frame']
@@ -100,6 +102,9 @@ class Tracker(object):
         # NOTE : Depth 
         self.use_color_in_depth = False
 
+        # decide if tracker fits directly to gt pose
+        self.fit_gt = False
+
     # def init_posenet_train(self):
     #     self.optim_trans_init = torch.optim.Adam([dict(params=self.transNet.parameters(), lr = self.cam_lr*1)]) # TODO ; 10→1
     #     self.optim_quats_init = torch.optim.Adam([dict(params=self.quatsNet.parameters() , lr = self.cam_lr*0.2)])
@@ -126,7 +131,7 @@ class Tracker(object):
         self.n_encoding = int(np.ceil(self.n_img / self.encoding_interval) + 1) # make sure the first and the last frame has its encoding
         self.posegrid = torch.cat([self.zeropose_encoding, torch.zeros(7)]).view(self.encoding_dim, 1).repeat(1, self.n_encoding) # (self.encoding_dim, self.n_encoding)
     
-    def optimize_cam_in_batch(self, camera_tensor, gt_color, gt_depth, batch_size, optim_quats_init, optim_trans_init):
+    def optimize_cam_in_batch(self, camera_tensor, gt_color, gt_depth, batch_size, optimizer):
         """
         Do one iteration of camera iteration. Sample pixels, render depth/color, calculate loss and backpropagation.
 
@@ -142,8 +147,9 @@ class Tracker(object):
         """
         device = self.device
         H, W, fx, fy, cx, cy = self.H, self.W, self.fx, self.fy, self.cx, self.cy
-        optim_quats_init.zero_grad()
-        optim_trans_init.zero_grad()
+        # optim_quats_init.zero_grad()
+        # optim_trans_init.zero_grad()
+        optimizer.zero_grad()
         c2w = get_camera_from_tensor(camera_tensor)
         Wedge = self.ignore_edge_W
         Hedge = self.ignore_edge_H
@@ -173,23 +179,26 @@ class Tracker(object):
         else:
             mask = batch_gt_depth > 0
 
-        # loss = (torch.abs(batch_gt_depth-depth) /
-        #        torch.sqrt(uncertainty+1e-10))[mask].sum()
+        loss = (torch.abs(batch_gt_depth-depth) /
+               torch.sqrt(uncertainty+1e-10))[mask].sum()
 
-        # if self.use_color_in_tracking:
-        #     color_loss = torch.abs(
-        #         batch_gt_color - color)[mask].sum()
-        #     loss += self.w_color_loss*color_loss
+        if self.use_color_in_tracking:
+            color_loss = torch.abs(
+                batch_gt_color - color)[mask].sum()
+            loss += self.w_color_loss*color_loss
 
-        color_loss = (torch.abs(
-            batch_gt_color - color)[mask].sum()) * self.w_color_loss
+        # color_loss = (torch.abs(
+        #     batch_gt_color - color)[mask].sum()) * self.w_color_loss
 
-        color_loss.backward()   
+        # color_loss.backward()   
+        loss.backward()   
 
-        optim_quats_init.step()
-        optim_trans_init.step()
-        optim_quats_init.zero_grad()
-        optim_trans_init.zero_grad()
+        # optim_quats_init.step()
+        # optim_trans_init.step()
+        # optim_quats_init.zero_grad()
+        # optim_trans_init.zero_grad()
+        optimizer.step()
+        optimizer.zero_grad()
 
         return color_loss.item()
 
@@ -223,6 +232,14 @@ class Tracker(object):
         new_enc = torch.matmul(M, torch.unsqueeze(base_enc, -1))
         new_enc = new_enc.view(-1, self.hidden_dim)
         return new_enc
+
+    def regress_prime(self, ys, len_xs, interval=1):
+        xs = torch.linspace(0, len_xs-1, len_xs)
+        xs_demeaned = xs - xs.mean()
+        xs_demeaned2 = xs_demeaned**2
+        ys_demeaned = ys - ys.mean(dim=0)
+        prime = ys_demeaned.transpose(0,1) @ xs_demeaned / xs_demeaned2.sum()
+        return prime
 
 
     def run(self):
@@ -378,6 +395,13 @@ class Tracker(object):
                 # optimizer.param_groups[3]['lr'] = cfg['PoseGrid']['prime_lr']
                 optimizer.param_groups[3]['lr'] = cfg['PoseGrid']['trans_prime_lr']
                 optimizer.param_groups[4]['lr'] = cfg['PoseGrid']['quat_prime_lr']
+                # optimizer = torch.optim.Adam([{'params': decoder_para_list},
+                #                             #   {'params': pose_enc_para_list},
+                #                               {'params': trans_enc_para_list},
+                #                               {'params': quat_enc_para_list},
+                #                             #   {'params': prime_para_list}])
+                #                               {'params': trans_prime_para_list}, 
+                #                               {'params': quat_prime_para_list}])
 
                 candidate_cam_tensor = None
                 current_min_loss = 10000000000.
@@ -409,20 +433,24 @@ class Tracker(object):
                     pred_c2w_homo = torch.cat([pred_c2w, torch.tensor([[0,0,0,1]], device=device)], dim=0)
                     camera_tensor = get_tensor_from_camera_in_pytorch(pred_c2w_homo)
 
-                    # Here learn gt pose directly to test if PoseGrid successfully fits it
-                    # loss = self.optimize_cam_in_batch(camera_tensor, gt_color, gt_depth, self.tracking_pixels, self.optim_quats_init, self.optim_trans_init)
-                    loss = torch.abs(gt_camera_tensor.to(device)- camera_tensor).mean()
-                    loss.backward()
+                    if self.fit_gt:
+                        # Here learn gt pose directly to test if PoseGrid successfully fits it
+                        loss = torch.abs(gt_camera_tensor.to(device)- camera_tensor).mean()
+                        loss.backward()
 
-                    optimizer.step()
-                    optimizer.zero_grad()
+                        optimizer.step()
+                        optimizer.zero_grad()
+                    else:
+                        loss = self.optimize_cam_in_batch(camera_tensor, gt_color, gt_depth, self.tracking_pixels, optimizer)
 
                     if cam_iter == 0:
                         initial_loss = loss
 
-                    # loss_camera_tensor = torch.abs(
-                    #     gt_camera_tensor.to(device)-camera_tensor.to(device)).mean().item()
-                    loss_camera_tensor = loss.item()
+                    if self.fit_gt:
+                        loss_camera_tensor = loss.item()
+                    else:
+                        loss_camera_tensor = torch.abs(
+                            gt_camera_tensor.to(device)-camera_tensor.to(device)).mean().item()
                     
                     fixed_camera_tensor = camera_tensor.clone().detach()
                     if camera_tensor[0] < 0:
@@ -473,11 +501,11 @@ class Tracker(object):
                             self.experiment.log(dict_log)
 
                             # TODO: add a visualization of posegrid
-                            plt.figure(figsize=(10, 8))
-                            sns.heatmap(self.posegrid, cmap='viridis', linewidths=.5)
-                            plt.savefig('current_posegrid.png')
-                            self.experiment.log({"posegrid": wandb.Image('current_posegrid.png')})
-                            plt.close()
+                            # plt.figure(figsize=(10, 8))
+                            # sns.heatmap(self.posegrid, cmap='viridis', linewidths=.5)
+                            # plt.savefig('current_posegrid.png')
+                            # self.experiment.log({"posegrid": wandb.Image('current_posegrid.png')})
+                            # plt.close()
         
                     if loss < current_min_loss:
                         candidate_idx = cam_iter
@@ -537,11 +565,21 @@ class Tracker(object):
             self.gt_c2w_list[idx] = gt_c2w.clone().cpu()
 
             # TODO: manually set primes if not learned
-            if not self.learn_prime:
-                if idx >= 1:
-                    now_c2w = self.estimate_c2w_list[idx].to(device).float()
-                    prime = get_tensor_from_camera(now_c2w, Tquad=True) - get_tensor_from_camera(pre_c2w.float(), Tquad=True) # Not sure if it is okay
-                    self.posegrid[-7:, idx_enc_prev] = prime.clone().detach()
+            if not self.learn_prime and idx >= 1:
+                # if idx >= 1:
+                #     now_c2w = self.estimate_c2w_list[idx].to(device).float()
+                #     prime = get_tensor_from_camera(now_c2w, Tquad=True) - get_tensor_from_camera(pre_c2w.float(), Tquad=True) # Not sure if it is okay
+                #     self.posegrid[-7:, idx_enc_prev] = prime.clone().detach()
+                if idx >= self.len_avg_prime-1:
+                    len_avg_prime = self.len_avg_prime
+                else:
+                    len_avg_prime = idx+1
+
+                avg_c2w_list = self.estimate_c2w_list[idx-len_avg_prime+1:idx+1]
+                avg_tensor_list = [get_tensor_from_camera(c2w.to(device).float(), Tquad=True) for c2w in avg_c2w_list]
+                avg_tensors = torch.vstack(avg_tensor_list)
+                prime = self.regress_prime(avg_tensors, len_avg_prime)
+                self.posegrid[-7:, idx_enc_prev] = prime.clone().detach()
 
             pre_c2w = c2w.clone()
             self.idx[0] = idx
