@@ -631,9 +631,9 @@ class Replica_event_txt(Replica):
         else:
             event_path = None
         if event_path is not None : 
-            #event_data = np.loadtxt(self.event_paths[index_event])
-            event_data = self.read_h5_events(self.event_paths[index_event])
-            xs, ys, ts, ps = self.read_h5_event_components(self.event_paths[index_event])
+            #event_data = np.loadtxt(event_path)
+            event_data = self.read_h5_events(event_path)
+            xs, ys, ts, ps = self.read_h5_event_components(event_path)
         else:
             event_data = np.zeros((1, 4)) # dummy event
             xs, ys, ts, ps = np.zeros(1), np.zeros(1), np.zeros(1), np.zeros(1)
@@ -656,7 +656,7 @@ class Replica_event_txt(Replica):
             K = as_intrinsics_matrix([self.fx, self.fy, self.cx, self.cy])
             # undistortion is only applied on color image, not depth!
             color_data = cv2.undistort(color_data, K, self.distortion)
-            #event_data = cv2.undistort(event_data, K, self.distortion)
+            # event_data = cv2.undistort(event_data, K, self.distortion) # NOTE: Maybe also distort the event stream?
 
         color_data = cv2.cvtColor(color_data, cv2.COLOR_BGR2RGB)
         color_data = color_data / 255.

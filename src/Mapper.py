@@ -125,7 +125,7 @@ class Mapper(object):
 
         points = torch.stack([X, Y, Z], dim=-1).reshape(-1, 3)
         if key == 'grid_coarse':
-            mask = np.ones(val_shape[::-1]).astype(np.bool)
+            mask = np.ones(val_shape[::-1]).astype(bool)
             return mask
         points_bak = points.clone()
         c2w = c2w.cpu().numpy()

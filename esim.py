@@ -3,6 +3,7 @@ import cv2
 import os
 import glob
 import esim_py
+from tqdm import tqdm
 
 # constructor
 contrast_threshold_pos = 0.1 # contrast thesholds for positive 
@@ -23,20 +24,19 @@ esim.setParameters(contrast_threshold_pos, contrast_threshold_neg, refractory_pe
 
 # generate Replica events
 places = [
-        'office0'
-        #   'office0_dense9995',→ what are these data?
-          #'office1'
-          #'office2',
-          #'office3',
-          #'office4'
-          #'room0',
-          #'room1'
-          #'room2'
+          'office0'
+          'office1'
+          'office2',
+          'office3',
+          'office4'
+          'room0',
+          'room1'
+          'room2'
         ]
 
-input_dir = '/scratch_net/biwidl215/myamaguchi/rpg_vid2e-master/data/Replica'
+input_dir = '/srv/beegfs02/scratch/data_shichen/data/EvenNICER-SLAM/Datasets/Replica'
 
-output_folder = '/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/Datasets/replica_gt_events'
+output_folder = '/scratch-second/shichen/replica_gt_txt'
 
 
 
@@ -55,7 +55,7 @@ for place in places:
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    for i in range(n_frames-1):
+    for i in tqdm(range(n_frames-1)):
         txt_filename = place + '_' + 'events' + str(i).zfill(6) + '_' + str(i+1).zfill(6) + '.txt'
         events_list_of_images = esim.generateFromStampedImageSequence(
             list_of_image_files[i : i + 2], # list of absolute paths to images     
