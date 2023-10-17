@@ -262,7 +262,7 @@ class Tracker(object):
 
         evs_at_xy = gt_event_images.squeeze()[j_tensor, i_tensor]
     
-        # NOTE : last_time(semi-asynchronous)
+        # NOTE : last_time
         idx_tensor = torch.tensor(idx).unsqueeze(0).to(device)
         ray_o, ray_d = self.get_event_rays(idx_tensor.unsqueeze(0), i_tensor, j_tensor, events_last_time, pre_c2w, H, W, fx, fy, cx, cy, device)
 
@@ -278,8 +278,6 @@ class Tracker(object):
         if idx >= 10:
             residual_events = (idx_time - events_pre_last_time)*first_event_polarity / (events_first_time - events_pre_last_time)
             fixed_pre_log_gray_new -= residual_events*0.1
-
-
 
         expected_gray = self.inverse_lin_log(fixed_pre_log_gray_new + evs_at_xy*0.1)
         
@@ -490,11 +488,11 @@ class Tracker(object):
                             
 
                         if idx < 10 :
-                            pre_evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
+                            pre_evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 0) 
 
-                        evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 1) 
-                        # pos_evs_dict_xy = dict((k, v) for k, v in pos_evs_dict_xy.items() if len(v) > 1) 
-                        # neg_evs_dict_xy = dict((k, v) for k, v in neg_evs_dict_xy.items() if len(v) > 1) 
+                        evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 0) 
+                        # pos_evs_dict_xy = dict((k, v) for k, v in pos_evs_dict_xy.items() if len(v) > 0) 
+                        # neg_evs_dict_xy = dict((k, v) for k, v in neg_evs_dict_xy.items() if len(v) > 0) 
                         x = np.arange(self.W)
                         y = np.arange(self.H)
                         no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
