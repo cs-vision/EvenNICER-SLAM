@@ -468,24 +468,9 @@ class Tracker(object):
                 gt_event_integrate = torch.cat((gt_event_integrate, gt_event), dim = 0)
                 gt_event_images += gt_event_image
 
-                if idx % 5 == 0:
-                    # # NOTE : initialize PoseNet
-                    # idx_total = torch.arange(start=idx, end=idx+5).to(device).reshape(5, -1)
-                    # self.init_posenet_train()
-                    # for init_i in range(50): 
-                    #     estimated_new_cam_trans = self.transNet.forward(idx_total)
-                    #     estimated_new_cam_quad = self.quatsNet.forward(idx_total)
-                    #     loss_trans = torch.abs(estimated_new_cam_trans - torch.tensor([0, 0, 0]).to(device)).mean()
-                    #     loss_trans.backward()
-
-                    #     loss_quad = torch.abs(estimated_new_cam_quad - torch.tensor([1, 0, 0, 0]).to(device)).mean()
-                    #     loss_quad.backward()
-
-                    #     self.optim_trans_init.step()
-                    #     self.optim_quats_init.step()
-                    #     self.optim_trans_init.zero_grad()
-                    #     self.optim_quats_init.zero_grad()
-
+                # NOTE : backward every frame
+                every_frame_backward = False
+                if idx % 5 == 0 or every_frame_backward == True:
                     events_in = gt_event_integrate.cpu().numpy()
                     evs_dict_xy = {}
 
@@ -513,25 +498,28 @@ class Tracker(object):
                         print("read events= {:0.5f}".format(end-start))
                 
                     for cam_iter in range(self.num_cam_iters):
-                        idx_tensor = torch.tensor(5).unsqueeze(0).to(device)
+                        if every_frame_backward == True:
+                            idx_tensor = torch.tensor(idx%5).unsqueeze(0).to(device)
+                        else:
+                            idx_tensor = torch.tensor(5).unsqueeze(0).to(device)
                         estimated_correct_cam_trans = self.transNet.forward(idx_tensor).unsqueeze(0)
-                        estimated_new_cam_quad = self.quatsNet.forward(idx_tensor).unsqueeze(0)
-                        estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad)
+                        estimated_correct_cam_quad = self.quatsNet.forward(idx_tensor).unsqueeze(0)
+                        estimated_correct_cam_rots = quad2rotation(estimated_correct_cam_quad)
                         estimated_correct_new_cam_c2w = torch.concat([estimated_correct_cam_rots, estimated_correct_cam_trans[...,None] ],dim=-1).squeeze()
                         bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape([1, 4])).type(torch.float32).to(device)
                         estimated_correct_new_cam_c2w_homogeneous= torch.cat([estimated_correct_new_cam_c2w, bottom], dim=0)
                         compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
-                        #compose_pose_new = torch.matmul(estimated_correct_new_cam_c2w_homogeneous, estimated_new_cam_c2w)[:3, :]
                         camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
 
-                        if self.event == True:
-                            loss_events = self.optimize_after_sampling_pixels(idx, estimated_new_cam_c2w, gt_c2w, camera_tensor,
+                        #if self.event == True:
+                        loss_events = self.optimize_after_sampling_pixels(idx, estimated_new_cam_c2w, gt_c2w, camera_tensor,
                                                                       evs_dict_xy, pre_evs_dict_xy, gt_event_images, no_evs_pixels,
                                                                       pre_gt_color, pre_gt_depth,
                                                                       gt_color, gt_depth, gt_event,
                                                                       self.optim_quats_init, self.optim_trans_init)
 
-                        loss_rgbd  = self.optimize_cam_rgbd(camera_tensor, gt_color, gt_depth, self.tracking_pixels,
+                        if idx % 5 == 0:
+                            loss_rgbd  = self.optimize_cam_rgbd(camera_tensor, gt_color, gt_depth, self.tracking_pixels,
                                                                 self.optim_quats_init, self.optim_trans_init)
                         
                         self.optim_quats_init.step()
@@ -539,10 +527,10 @@ class Tracker(object):
                         self.optim_quats_init.zero_grad()
                         self.optim_trans_init.zero_grad()
                      
-                        print(f"RGBD loss:{loss_rgbd}\n")
-                        if self.event == True:
-                            print("Event Loss", loss_events)
-                            loss_rgbd += loss_events
+                        print(f"Event loss:{loss_events}\n")
+                        if idx % 5 == 0:
+                            print("RGBD Loss", loss_rgbd)
+                            loss_events += loss_rgbd
                         c2w = get_camera_from_tensor(camera_tensor)
                         loss_camera_tensor = torch.abs(gt_camera_tensor.to(device)-camera_tensor).mean().item()
 
@@ -587,8 +575,8 @@ class Tracker(object):
                                     self.experiment.log(dict_log)
 
                         
-                        if loss_rgbd < current_min_loss:
-                            current_min_loss = loss_rgbd
+                        if loss_events < current_min_loss:
+                            current_min_loss = loss_events
                             candidate_cam_tensor = camera_tensor.clone().detach()
                             if not self.use_last:
                                 candidate_transNet_para = self.transNet.state_dict()
@@ -642,7 +630,7 @@ class Tracker(object):
                         loss_trans = torch.abs(estimated_new_cam_trans - estimated_correct_cam_trans.clone().detach()).to(device).mean()
                         loss_trans.backward()
 
-                        loss_quad = torch.abs(estimated_new_cam_quad - estimated_new_cam_quad.clone().detach()).to(device).mean()
+                        loss_quad = torch.abs(estimated_new_cam_quad - estimated_correct_cam_quad.clone().detach()).to(device).mean()
                         loss_quad.backward()
 
                         self.optim_trans_init.step()
