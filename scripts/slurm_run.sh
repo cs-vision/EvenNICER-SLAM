@@ -19,10 +19,10 @@ output_affix="/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/output"
 
 method="evennicer-slam"
 dataset=${datasets[0]}
-scene_name="office3"
+scene_name="office2"
 
 # Edit this to distinguish different configs
-run_suffix="50_150_Asynchronous"
+run_suffix="50_150_fixed_hdf5"
 
 # Run single or array job
 if [ -z "$SLURM_ARRAY_TASK_ID" ]; then
