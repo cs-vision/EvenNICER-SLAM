@@ -8,6 +8,8 @@ import torch.nn.functional as F
 from src.common import as_intrinsics_matrix
 from torch.utils.data import Dataset
 
+import h5py # change event dataformat
+import time
 
 def readEXR_onlydepth(filename):
     """
@@ -88,7 +90,7 @@ class BaseDataset(Dataset):
             color_data = cv2.undistort(color_data, K, self.distortion)
 
         color_data = cv2.cvtColor(color_data, cv2.COLOR_BGR2RGB)
-        color_data = color_data / 255
+        color_data = color_data / 255.
         depth_data = depth_data.astype(np.float32) / self.png_depth_scale
         H, W = depth_data.shape
         color_data = cv2.resize(color_data, (W, H))
@@ -141,7 +143,6 @@ class Replica_event(Replica):
                  ):
         super(Replica_event, self).__init__(cfg, args, scale, device)
         print("Running on Replica_event dataset!")
-        # TODO : event_folder should be changed 
         if args.event_folder is None:
             self.event_folder = cfg['data']['event_folder']
         else:
@@ -149,22 +150,8 @@ class Replica_event(Replica):
         self.event_paths = sorted(
             glob.glob(f'{self.event_folder}/*frame*.png'))
         self.n_event = len(self.event_paths)
+        # print(self.n_event, self.n_img)
         assert self.n_event == self.n_img - 1, f"Number of GT events does not match that of GT images!"
-
-        # self.event_paths = sorted(
-        #     glob.glob(f'{self.event_folder}/*events*.txt')
-        # )
-        
-
-        # あとで .to(self.device)する
-        # self.events = 
-
-
-    # TODO : self.events should be defined in def __init__()
-    # THEN  
-    # events = events(frame_reader) 
-    # def __events__(self):
-    #     return self.events
 
     def __getitem__(self, index):
         color_path = self.color_paths[index]
@@ -181,7 +168,7 @@ class Replica_event(Replica):
             depth_data = readEXR_onlydepth(depth_path)
         if event_path is not None:
             event_data = cv2.imread(event_path) # png: [0, -, +], event_data: [+, -, 0]
-        else: # when index == 0
+        else:
             # return all black event image for the first frame
             event_data = np.zeros_like(color_data)
         if self.distortion is not None:
@@ -620,6 +607,166 @@ class TUM_RGBD(BaseDataset):
         pose[:3, 3] = pvec[:3]
         return pose
 
+class Replica_event_txt(Replica):
+    def __init__(self, cfg, args, scale, device='cuda:0'
+                 ):
+        super(Replica_event_txt, self).__init__(cfg, args, scale, device)
+        print("Running on Replica_event_txt dataset!")
+        if args.event_folder is None:
+            self.event_folder = cfg['data']['event_folder']
+        else:
+            self.event_folder = args.event_folder
+        self.event_paths = sorted(glob.glob(f'{self.event_folder}/*events*.h5'))
+        self.n_event = len(self.event_paths)
+        assert self.n_event == self.n_img - 1, f"Number of GT events does not match that of GT images!"
+
+    def __getitem__(self, index):
+        color_path = self.color_paths[index]
+        depth_path = self.depth_paths[index]
+        color_data = cv2.imread(color_path)
+
+        index_event = index - 1
+        if index_event >= 0:
+            event_path = self.event_paths[index_event]
+        else:
+            event_path = None
+        if event_path is not None : 
+            #event_data = np.loadtxt(self.event_paths[index_event])
+            event_data = self.read_h5_events(self.event_paths[index_event])
+            xs, ys, ts, ps = self.read_h5_event_components(self.event_paths[index_event])
+        else:
+            event_data = np.zeros((1, 4)) # dummy event
+            xs, ys, ts, ps = np.zeros(1), np.zeros(1), np.zeros(1), np.zeros(1)
+        event_data = torch.from_numpy(event_data)
+        xt, yt, tt, pt = torch.from_numpy(xs), torch.from_numpy(ys), torch.from_numpy(ts), torch.from_numpy(ps)
+        xt = xt.float().to(self.device)
+        yt = yt.float().to(self.device)
+        tt = (tt[:]-tt[0]).float().to(self.device)
+        pt = pt.float().to(self.device)
+    
+        event_image = self.events_to_image_torch(xt, yt, pt, self.device)
+
+        if '.png' in depth_path:
+            depth_data = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)
+        elif '.exr' in depth_path:
+            depth_data = readEXR_onlydepth(depth_path)
+        if self.distortion is not None:
+             K = as_intrinsics_matrix([self.fx, self.fy, self.cx, self.cy])
+        if self.distortion is not None:
+            K = as_intrinsics_matrix([self.fx, self.fy, self.cx, self.cy])
+            # undistortion is only applied on color image, not depth!
+            color_data = cv2.undistort(color_data, K, self.distortion)
+            #event_data = cv2.undistort(event_data, K, self.distortion)
+
+        color_data = cv2.cvtColor(color_data, cv2.COLOR_BGR2RGB)
+        color_data = color_data / 255.
+        depth_data = depth_data.astype(np.float32) / self.png_depth_scale
+
+        H, W = depth_data.shape
+        color_data = cv2.resize(color_data, (W, H))
+        color_data = torch.from_numpy(color_data)
+        depth_data = torch.from_numpy(depth_data)*self.scale
+
+        if self.crop_size is not None:
+            # follow the pre-processing step in lietorch, actually is resize
+            color_data = color_data.permute(2, 0, 1)
+            color_data = F.interpolate(
+                color_data[None], self.crop_size, mode='bilinear', align_corners=True)[0]
+            depth_data = F.interpolate(
+                depth_data[None, None], self.crop_size, mode='nearest')[0, 0]
+            color_data = color_data.permute(1, 2, 0).contiguous()
+
+        edge = self.crop_edge
+        if edge > 0:
+            # crop image edge, there are invalid value on the edge of the color image
+            color_data = color_data[edge:-edge, edge:-edge]
+            depth_data = depth_data[edge:-edge, edge:-edge]
+
+        pose = self.poses[index]
+        pose[:3, 3] *= self.scale
+        return index, color_data.to(self.device), depth_data.to(self.device), event_data.to(self.device), pose.to(self.device), event_image.to(self.device)
+    
+    def read_h5_events(self, hdf_path):
+        """
+        Read events from HDF5 file into 4xN numpy array (N=number of events)
+        """
+        f = h5py.File(hdf_path, 'r')
+        if 'events/x' in f:
+            #legacy
+            events = np.stack((f['events/x'][:], f['events/y'][:], f['events/ts'][:], np.where(f['events/p'][:], 1, -1)), axis=1)
+        else:
+            events = np.stack((f['events/xs'][:], f['events/ys'][:], f['events/ts'][:], np.where(f['events/ps'][:], 1, -1)), axis=1)
+        return events
+    
+    def read_h5_event_components(self, hdf_path):
+        """
+        Read events from HDF5 file. Return x,y,t,p components.
+        """
+        f = h5py.File(hdf_path, 'r')
+        if 'events/x' in f:
+            #legacy
+            return (f['events/x'][:], f['events/y'][:], f['events/ts'][:], np.where(f['events/p'][:], 1, -1))
+        else:
+            return (f['events/xs'][:], f['events/ys'][:], f['events/ts'][:], np.where(f['events/ps'][:], 1, -1))
+
+    def interpolate_to_image(self, pxs, pys, dxs, dys, weights, img):
+        """
+        Accumulate x and y coords to an image using bilinear interpolation
+        """
+        img.index_put_((pys,   pxs  ), weights*(1.0-dxs)*(1.0-dys), accumulate=True)
+        img.index_put_((pys,   pxs+1), weights*dxs*(1.0-dys), accumulate=True)
+        img.index_put_((pys+1, pxs  ), weights*(1.0-dxs)*dys, accumulate=True)
+        img.index_put_((pys+1, pxs+1), weights*dxs*dys, accumulate=True)
+        return img
+
+    def events_to_image_torch(self, xs, ys, ps,
+            device=None, sensor_size=(680, 1200), clip_out_of_range=True,
+            interpolation=None, padding=False):
+        """
+        Method to turn event tensor to image. Allows for bilinear interpolation.
+            :param xs: tensor of x coords of events
+            :param ys: tensor of y coords of events
+            :param ps: tensor of event polarities/weights
+            :param device: the device on which the image is. If none, set to events device
+            :param sensor_size: the size of the image sensor/output image
+            :param clip_out_of_range: if the events go beyond the desired image size,
+                clip the events to fit into the image
+            :param interpolation: which interpolation to use. Options=None,'bilinear'
+            :param padding if bilinear interpolation, allow padding the image by 1 to allow events to fit:
+        """
+        if device is None:
+            device = xs.device
+        if interpolation == 'bilinear' and padding:
+            img_size = (sensor_size[0]+1, sensor_size[1]+1)
+        else:
+            img_size = list(sensor_size)
+
+        mask = torch.ones(xs.size(), device=device)
+        if clip_out_of_range:
+            zero_v = torch.tensor([0.], device=device)
+            ones_v = torch.tensor([1.], device=device)
+            clipx = img_size[1] if interpolation is None and padding==False else img_size[1]-1
+            clipy = img_size[0] if interpolation is None and padding==False else img_size[0]-1
+            mask = torch.where(xs>=clipx, zero_v, ones_v)*torch.where(ys>=clipy, zero_v, ones_v)
+
+        img = torch.zeros(img_size).to(device)
+        if interpolation == 'bilinear' and xs.dtype is not torch.long and xs.dtype is not torch.long:
+            pxs = (xs.floor()).float()
+            pys = (ys.floor()).float()
+            dxs = (xs-pxs).float()
+            dys = (ys-pys).float()
+            pxs = (pxs*mask).long()
+            pys = (pys*mask).long()
+            masked_ps = ps.squeeze()*mask
+            self.interpolate_to_image(pxs, pys, dxs, dys, masked_ps, img)
+        else:
+            if xs.dtype is not torch.long:
+                xs = xs.long().to(device)
+            if ys.dtype is not torch.long:
+                ys = ys.long().to(device)
+                img.index_put_((ys, xs), ps, accumulate=True)
+        return img
+
 
 dataset_dict = {
     "replica": Replica,
@@ -628,6 +775,7 @@ dataset_dict = {
     "azure": Azure,
     "tumrgbd": TUM_RGBD,
     "replica_event": Replica_event,
+    "replica_event_txt" : Replica_event_txt,
     "rpg": RPG,
     "rpg_event": RPG_event,
     "rpg_event_dense": RPG_event_dense

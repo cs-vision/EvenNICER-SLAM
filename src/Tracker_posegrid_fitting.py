@@ -103,7 +103,7 @@ class Tracker(object):
         self.use_color_in_depth = False
 
         # decide if tracker fits directly to gt pose
-        self.fit_gt = False
+        self.fit_gt = True
 
     # def init_posenet_train(self):
     #     self.optim_trans_init = torch.optim.Adam([dict(params=self.transNet.parameters(), lr = self.cam_lr*1)]) # TODO ; 10→1

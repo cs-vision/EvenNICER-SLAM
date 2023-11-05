@@ -129,6 +129,7 @@ class PoseGrid_decoder(torch.nn.Module):
         return input_enc
 
     def normalize_time(self, t, t1, t2):
+        # NOTE : t1とt2に何をinputしている？？
         # normalize t to [0, 1]
         if torch.equal(t1, t2):
             return torch.zeros_like(t)

@@ -6,7 +6,8 @@ data:
   input_folder: Datasets/Replica/room0
   output: output/Replica/room0
   # event folder
-  event_folder: Datasets/replica_gt_png/room0
+  # event_folder: Datasets/replica_gt_png/room0
+  event_folder : Datasets/replica_gt_events/room0
 PoseGrid:
   zeropose_encoding: pretrained/room0_zeropose_encoding.npy
   startpose_encoding: pretrained/room0_startpose_encoding.npy
