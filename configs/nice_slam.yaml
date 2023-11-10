@@ -134,7 +134,7 @@ PoseGrid:
   pretrained_B: pretrained/pretrained_B.npy
   only_Bx: True # use Bx also as By & Bz for its expressiveness
   fix_decoder: True
-  fit_poses: True # let PoseGrid learn the gt poses directly. Only for debugging
+  fit_poses: False # let PoseGrid learn the gt poses directly. Only for debugging
   decoder_lr: 0.001
   # pose_enc_lr: 0.005
   trans_enc_lr: 0.005

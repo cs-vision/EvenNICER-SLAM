@@ -103,7 +103,7 @@ class Tracker(object):
         self.use_color_in_depth = False
 
         # decide if tracker fits directly to gt pose
-        self.fit_gt = True
+        self.fit_gt = False
 
     # def init_posenet_train(self):
     #     self.optim_trans_init = torch.optim.Adam([dict(params=self.transNet.parameters(), lr = self.cam_lr*1)]) # TODO ; 10→1
@@ -186,17 +186,7 @@ class Tracker(object):
             color_loss = torch.abs(
                 batch_gt_color - color)[mask].sum()
             loss += self.w_color_loss*color_loss
-
-        # color_loss = (torch.abs(
-        #     batch_gt_color - color)[mask].sum()) * self.w_color_loss
-
-        # color_loss.backward()   
         loss.backward()   
-
-        # optim_quats_init.step()
-        # optim_trans_init.step()
-        # optim_quats_init.zero_grad()
-        # optim_trans_init.zero_grad()
         optimizer.step()
         optimizer.zero_grad()
 
@@ -249,24 +239,7 @@ class Tracker(object):
         self.fix_decoder = cfg['PoseGrid']['fix_decoder']
         self.min_locs = self.bound[:, 0].to(device)
         self.boxing_scales = torch.from_numpy(np.array(cfg['PoseGrid']['boxing_scales'])).to(device)
-        
-        # # NOTE : pretrain PoseNet
-        # idx_total = torch.arange(start=0, end=self.n_img).to(device).reshape(self.n_img, -1)
-        # self.init_posenet_train()
-        # for init_i in range(50): # TODO : 0→50 にする
-        #     estimated_new_cam_trans = self.transNet.forward(idx_total)
-        #     estimated_new_cam_quad = self.quatsNet.forward(idx_total)
-        #     loss_trans = torch.abs(estimated_new_cam_trans - torch.tensor([0, 0, 0]).to(self.device)).mean()
-        #     loss_trans.backward()
-
-        #     loss_quad = torch.abs(estimated_new_cam_quad - torch.tensor([1, 0, 0, 0]).to(self.device)).mean()
-        #     loss_quad.backward()
-
-        #     self.optim_trans_init.step()
-        #     self.optim_quats_init.step()
-        #     self.optim_trans_init.zero_grad()
-        #     self.optim_quats_init.zero_grad()
-
+    
         self.c = {}
         if self.verbose:
             pbar = self.frame_loader
@@ -319,26 +292,6 @@ class Tracker(object):
             else:
                 gt_camera_tensor = get_tensor_from_camera(gt_c2w)
 
-                # rearrange to xyzw convention (temporally)
-                # gt_camera_tensor = gt_camera_tensor[[1,2,3,0,4,5,6]]
-
-                # if self.const_speed_assumption and idx-2 >= 0:
-                #     pre_c2w = pre_c2w.float()
-                #     delta = pre_c2w@self.estimate_c2w_list[idx-2].to(
-                #         device).float().inverse()
-                #     estimated_new_cam_c2w = delta@pre_c2w
-                # else:
-                #     estimated_new_cam_c2w = pre_c2w
-
-                # idx_tensor = torch.tensor(idx).unsqueeze(0).to(device)
-                # estimated_correct_cam_trans = self.transNet.forward(idx_tensor).unsqueeze(0)
-                # estimated_new_cam_quad = self.quatsNet.forward(idx_tensor).unsqueeze(0)
-                # estimated_correct_cam_rots = quad2rotation(estimated_new_cam_quad)
-                # estimated_correct_new_cam_c2w = torch.concat([estimated_correct_cam_rots, estimated_correct_cam_trans[...,None] ],dim=-1).squeeze()
-                # bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape([1, 4])).type(torch.float32).to(device)
-                # estimated_correct_new_cam_c2w_homogeneous = torch.cat([estimated_correct_new_cam_c2w, bottom], dim=0)
-                # compose_pose = torch.matmul(estimated_new_cam_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
-                # camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
                 t = torch.tensor(idx).unsqueeze(0).to(device)
                 t1, t2 = idx_enc_prev_slam.to(device), idx_enc_next_slam.to(device)
                 enc1, enc2 = self.posegrid[:, idx_enc_prev].clone().to(device), self.posegrid[:, idx_enc_next].clone().to(device)
@@ -461,16 +414,7 @@ class Tracker(object):
                         if cam_iter == self.num_cam_iters-1:
                             print(
                                 f'camera tensor error: {initial_loss_camera_tensor:.4f}->{loss_camera_tensor:.4f}')
-                            # dict_log = {
-                            #     'Camera error': loss_camera_tensor,
-                            #     'Fixed camera error' : fixed_camera_error,
-                            #     'Camera error improvement': initial_loss_camera_tensor - loss_camera_tensor,
-                            #     'Frame': idx,
-                            #     'first element of quaternion' : camera_tensor[0], 
-                            #     'first element of gt quaternion' : gt_camera_tensor[0],
-                            #     'first element of translation' : camera_tensor[4],
-                            #     'first element of gt translation' : gt_camera_tensor[4]
-                            #     }
+    
                             dict_log = {
                                 'Camera error': loss_camera_tensor,
                                 'Fixed camera error' : fixed_camera_error,

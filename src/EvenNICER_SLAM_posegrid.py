@@ -8,9 +8,11 @@ import torch.multiprocessing
 import torch.multiprocessing as mp
 
 from src import config
-from src.Mapper_nice import Mapper
+# from src.Mapper_nice import Mapper
+from src.Mapper_posegrid_hdf5 import Mapper
 # from src.Tracker_nicepose import Tracker
-from src.Tracker_posegrid_fitting import Tracker
+# from src.Tracker_posegrid_fitting import Tracker
+from src.Tracker_posegrid_hdf5 import Tracker
 from src.utils.datasets import get_dataset
 from src.utils.Logger import Logger
 from src.utils.Mesher import Mesher
