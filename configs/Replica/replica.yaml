@@ -25,7 +25,7 @@ tracking:
   seperate_LR: False
   # PoseNet : shoule be false
   # EvenNicerSLAM(frame-wise): shoule be True
-  const_speed_assumption: False
+  const_speed_assumption: True
   lr: 0.001
   pixels: 200
   iters: 10
