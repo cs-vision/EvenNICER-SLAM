@@ -252,7 +252,7 @@ class Tracker(object):
             gt_neg = torch.unsqueeze(batch_gt_event[:, 1] , dim = 1)
 
             C_thres = 0.1
-            # NOTE : preとcurrent 両方をrederにしたらどうなるか
+            # NOTE : preとcurrent 両方をrenderにしたらどうなるか
             batch_gt_loggray_events = batch_pre_gt_loggray -  gt_pos * C_thres + gt_neg * C_thres
             #batch_gt_loggray_events = pre_rendered_gray_log -  gt_pos * C_thres + gt_neg * C_thres
         
