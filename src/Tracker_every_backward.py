@@ -170,7 +170,9 @@ class Tracker(object):
         estimated_tensor = get_tensor_from_camera_in_pytorch(estimated_c2w)
         return estimated_c2w, estimated_tensor
 
-    def get_camera_pose(self, id, pre_c2w, device):
+    def get_camera_pose_practice(self, id, pre_c2w, device):
+        id = id*self.fps
+        id %= 5
         estimated_correct_cam_trans = self.transNet.forward(id).unsqueeze(0)
         estimated_correct_cam_quad = self.quatsNet.forward(id).unsqueeze(0)
 
@@ -185,10 +187,7 @@ class Tracker(object):
     def get_event_rays(self, i, j, time, pre_c2w, H, W, fx, fy, cx, cy, device, fix=False):
         idx = time*self.fps
         idx %= 5
-        #print(idx)
         c2w, _ = self.get_camera_pose(idx, pre_c2w, device)
-        # print(pre_c2w)
-        # print(c2w[0])
         if fix:
             c2w = c2w.clone().detach()
         dirs = torch.stack(
@@ -218,7 +217,7 @@ class Tracker(object):
         loss_event = torch.abs(batch_pre_gt_gray*255 - rendered_gray*255).sum()
 
         # NOTE : event sampling
-        random_event_sampling = False
+        random_event_sampling = True
         batch_i, batch_j, batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_exit_event(
             Hedge, H-Hedge, Wedge, W-Wedge, batch_size//2, H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, device)
         batch_pre_gt_gray = self.rgb_to_luma(batch_pre_gt_color)
@@ -249,10 +248,6 @@ class Tracker(object):
 
             events_random_time = torch.tensor(events_random_time, dtype=torch.float32).reshape(batch_size//2, -1).to(device)
             events_random_sum = torch.tensor(events_random_sum, dtype=torch.float32).reshape(batch_size//2, -1).to(device)
-            # print(batch_i)
-            # print(batch_j)
-            # print(events_random_time)
-            # print(events_random_sum)
             ray_o, ray_d = self.get_event_rays(batch_i, batch_j, events_random_time, pre_c2w, H, W, fx, fy, cx, cy, device) 
             ret = self.renderer.render_batch_ray(self.c, self.decoders, ray_d, ray_o, device, stage='color', gt_depth=batch_gt_depth)
             _, _, rendered_color = ret
@@ -625,7 +620,7 @@ class Tracker(object):
                         #                                               self.optim_quats_init, self.optim_trans_init)
 
                         loss_events = self.optimize_cam_event(camera_tensor, gt_depth, gt_event_images.squeeze(0), pre_gt_color, evs_dict_xy, self.tracking_pixels, previous_c2w, self.optim_quats_init, self.optim_trans_init)
-                        if idx % 5 == 0:
+                        if idx % 5 == 0 or idx <= 10:
                             loss_rgbd  = self.optimize_cam_rgbd(camera_tensor, gt_color, gt_depth, self.tracking_pixels,
                                                                 self.optim_quats_init, self.optim_trans_init)
                         
@@ -729,7 +724,7 @@ class Tracker(object):
                 if idx >= 5:
                     pre_evs_dict_xy = dict(evs_dict_xy)
                     # NOTE : initialize PoseNet
-                    # NOTE: 11/23 入れるべきか，否か→ないほうがよさそう...?
+                    # NOTE: 11/23 入れるべきか，否か
                     idx_total = torch.arange(start=0, end=6).to(device).reshape(6, -1)
                     self.init_posenet_train()
                     for init_i in range(50): 

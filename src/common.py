@@ -168,7 +168,7 @@ def select_uv_event_exit_event(i, j, n, depth, color, event, device='cuda:0'):
     color = color.reshape(-1, 3)
     event  = event.reshape(-1, 1)
 
-    # イベントの値が0より大きい要素のインデックスを得る
+    # イベントの値が0ではない要素のインデックスを得る
     positive_event_indices = (event != 0).nonzero(as_tuple=True)[0]
 
     # positive_event_indicesの中からランダムにn個のインデックスを選択

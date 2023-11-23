@@ -10,8 +10,8 @@ import torch.multiprocessing as mp
 from src import config
 from src.Mapper import Mapper
 #from src.Tracker import Tracker # NOTE : PoseNetたくさん, 5frame おきにbackwardする(framewise)
-#from src.Tracker_every_backward import Tracker　# NOTE : PoseNetたくさん， every frame backward 
-from src.Tracker_events_branch import Tracker # NOTE : PoseNet1つ, idx0からのPoseを学習
+from src.Tracker_every_backward import Tracker # NOTE : PoseNetたくさん， every frame backward 
+#from src.Tracker_events_branch import Tracker # NOTE : PoseNet1つ, idx0からのPoseを学習(精度はブレブレ)
 from src.utils.datasets import get_dataset
 from src.utils.Logger import Logger
 from src.utils.Mesher import Mesher
