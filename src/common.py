@@ -119,11 +119,76 @@ def select_uv_event(i, j, n, depth, color, event, device='cuda:0'):
     j = j[indices]  # (n)
     depth = depth.reshape(-1)
     color = color.reshape(-1, 3)
-    event = event.reshape(-1, 2)
+    # NOTE: positive と negative の event を分けるかどうか
+    #event = event.reshape(-1, 2)
+    event  = event.reshape(-1, 1)
     depth = depth[indices]  # (n)
     color = color[indices]  # (n,3)
     event = event[indices]
     return i, j, depth, color, event
+
+def select_uv_event_noevent(i, j, n, depth, color, event, device='cuda:0'):
+    """
+    Select n uv from dense uv.
+    """
+    i = i.reshape(-1)
+    j = j.reshape(-1)
+    depth = depth.reshape(-1)
+    color = color.reshape(-1, 3)
+    event  = event.reshape(-1, 1)
+
+    # イベントの値が0より大きい要素のインデックスを得る
+    positive_event_indices = (event == 0).nonzero(as_tuple=True)[0]
+
+    # positive_event_indicesの中からランダムにn個のインデックスを選択
+    selected_indices = torch.randint(positive_event_indices.shape[0], (n,), device=device)
+
+    # 選ばれたインデックスに基づいて次元をクランプ
+    selected_indices = selected_indices.clamp(0, positive_event_indices.shape[0])
+
+    # positive_event_indicesから選ばれたインデックスに対応するインデックスを取得
+    indices = positive_event_indices[selected_indices]
+
+    # indicesを使用してデータを選択
+    i = i[indices]  # (n)
+    j = j[indices]  # (n)
+    depth = depth[indices]  # (n)
+    color = color[indices]  # (n,3)
+    event = event[indices]  # (n,1)
+    
+    return i, j, depth, color, event
+
+def select_uv_event_exit_event(i, j, n, depth, color, event, device='cuda:0'):
+    """
+    Select n uv from dense uv.
+    """
+    i = i.reshape(-1)
+    j = j.reshape(-1)
+    depth = depth.reshape(-1)
+    color = color.reshape(-1, 3)
+    event  = event.reshape(-1, 1)
+
+    # イベントの値が0より大きい要素のインデックスを得る
+    positive_event_indices = (event != 0).nonzero(as_tuple=True)[0]
+
+    # positive_event_indicesの中からランダムにn個のインデックスを選択
+    selected_indices = torch.randint(positive_event_indices.shape[0], (n,), device=device)
+
+    # 選ばれたインデックスに基づいて次元をクランプ
+    selected_indices = selected_indices.clamp(0, positive_event_indices.shape[0])
+
+    # positive_event_indicesから選ばれたインデックスに対応するインデックスを取得
+    indices = positive_event_indices[selected_indices]
+
+    # indicesを使用してデータを選択
+    i = i[indices]  # (n)
+    j = j[indices]  # (n)
+    depth = depth[indices]  # (n)
+    color = color[indices]  # (n,3)
+    event = event[indices]  # (n,1)
+    
+    return i, j, depth, color, event
+
 
 def get_sample_uv(H0, H1, W0, W1, n, depth, color, device='cuda:0'):
     """
@@ -152,6 +217,36 @@ def get_sample_uv_event(H0, H1, W0, W1, n, depth, color, event, device='cuda:0')
     i = i.t()  # transpose
     j = j.t()
     i, j, depth, color, event = select_uv_event(i, j, n, depth, color, event, device=device)
+    return i, j, depth, color, event
+
+def get_sample_uv_noevent(H0, H1, W0, W1, n, depth, color, event, device='cuda:0'):
+    """
+    Sample n uv coordinates from an image region H0..H1, W0..W1
+
+    """
+    depth = depth[H0:H1, W0:W1]
+    color = color[H0:H1, W0:W1]
+    event = event[H0:H1, W0:W1]
+    i, j = torch.meshgrid(torch.linspace(
+        W0, W1-1, W1-W0).to(device), torch.linspace(H0, H1-1, H1-H0).to(device))
+    i = i.t()  # transpose
+    j = j.t()
+    i, j, depth, color, event = select_uv_event_noevent(i, j, n, depth, color, event, device=device)
+    return i, j, depth, color, event
+
+def get_sample_uv_exit_event(H0, H1, W0, W1, n, depth, color, event, device='cuda:0'):
+    """
+    Sample n uv coordinates from an image region H0..H1, W0..W1
+
+    """
+    depth = depth[H0:H1, W0:W1]
+    color = color[H0:H1, W0:W1]
+    event = event[H0:H1, W0:W1]
+    i, j = torch.meshgrid(torch.linspace(
+        W0, W1-1, W1-W0).to(device), torch.linspace(H0, H1-1, H1-H0).to(device))
+    i = i.t()  # transpose
+    j = j.t()
+    i, j, depth, color, event = select_uv_event_exit_event(i, j, n, depth, color, event, device=device)
     return i, j, depth, color, event
 
 def get_samples(H0, H1, W0, W1, n, H, W, fx, fy, cx, cy, c2w, depth, color, device):
@@ -183,6 +278,27 @@ def get_samples_event(H0, H1, W0, W1, n, H, W, fx, fy, cx, cy, c2w, depth, color
     rays_o, rays_d = get_rays_from_uv(i, j, c2w, H, W, fx, fy, cx, cy, device)
     return rays_o, rays_d, sample_depth, sample_color, sample_event
 
+def get_samples_noevent(H0, H1, W0, W1, n, H, W, fx, fy, cx, cy, c2w, depth, color, event, device):
+    """
+    Get n rays from the image region H0..H1, W0..W1.
+    c2w is its camera pose and depth/color/event is the corresponding image tensor.
+
+    """
+    i, j, sample_depth, sample_color, sample_event = get_sample_uv_noevent(
+        H0, H1, W0, W1, n, depth, color, event, device=device)
+    rays_o, rays_d = get_rays_from_uv(i, j, c2w, H, W, fx, fy, cx, cy, device)
+    return i, j, rays_o, rays_d, sample_depth, sample_color, sample_event
+
+def get_samples_exit_event(H0, H1, W0, W1, n, H, W, fx, fy, cx, cy, c2w, depth, color, event, device):
+    """
+    Get n rays from the image region H0..H1, W0..W1.
+    c2w is its camera pose and depth/color/event is the corresponding image tensor.
+
+    """
+    i, j, sample_depth, sample_color, sample_event = get_sample_uv_exit_event(
+        H0, H1, W0, W1, n, depth, color, event, device=device)
+    rays_o, rays_d = get_rays_from_uv(i, j, c2w, H, W, fx, fy, cx, cy, device)
+    return i, j, rays_o, rays_d, sample_depth, sample_color, sample_event
 
 def quad2rotation(quad):
     """
