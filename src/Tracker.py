@@ -14,6 +14,8 @@ import torch.nn.functional as F
 from src.common import (get_camera_from_tensor, get_samples,
                         get_tensor_from_camera, 
                         get_samples_event,
+                        get_samples_noevent,
+                        get_samples_exit_event,
                         get_rays_from_uv,
                         quad2rotation,get_tensor_from_camera_in_pytorch)
 from src.utils.datasets import get_dataset
@@ -179,6 +181,47 @@ class Tracker(object):
         rays_d = torch.sum(dirs * c2w[:, :3, :3], -1)
         rays_o = c2w[:, :3, -1].expand(rays_d.shape)
         return rays_o, rays_d
+
+    def optimize_cam_event(self, camera_tensor, gt_depth, gt_event, pre_gt_color, batch_size, optim_quats_init, optim_trans_init):
+        device = self.device
+        H, W, fx, fy, cx, cy = self.H, self.W, self.fx, self.fy, self.cx, self.cy
+        optim_quats_init.zero_grad()
+        optim_trans_init.zero_grad()
+
+        c2w = get_camera_from_tensor(camera_tensor)
+        Wedge = self.ignore_edge_W
+        Hedge = self.ignore_edge_H
+
+        # NOTE : noevent sampling
+        batch_i, batch_j, batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_noevent(
+            Hedge, H-Hedge, Wedge, W-Wedge, int(batch_size/2), H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, device)
+        ray_event = self.renderer.render_batch_ray(self.c, self.decoders, batch_rays_d, batch_rays_o, device, stage='color', gt_depth=batch_gt_depth)
+        _, _, rendered_color = ray_event
+        rendered_gray = self.rgb_to_luma(rendered_color)
+        batch_pre_gt_gray = self.rgb_to_luma(batch_pre_gt_color)
+        loss_event = torch.abs(batch_pre_gt_gray*255 - rendered_gray*255).sum()
+
+        # NOTE : event sampling
+
+        batch_i, batch_j, batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_exit_event(
+            Hedge, H-Hedge, Wedge, W-Wedge, int(batch_size/2), H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, device)
+        ray_event = self.renderer.render_batch_ray(self.c, self.decoders, batch_rays_d, batch_rays_o, device, stage='color', gt_depth=batch_gt_depth)
+        _, _, rendered_color = ray_event
+        rendered_gray = self.rgb_to_luma(rendered_color)
+        batch_pre_gt_gray = self.rgb_to_luma(batch_pre_gt_color)
+        batch_pre_gt_loggray = self.lin_log(batch_pre_gt_gray*255, 20)
+        
+        gt_posneg = torch.unsqueeze(batch_gt_event[:, 0], dim=1)
+        C_thres = 0.1
+
+        batch_gt_loggray_events = batch_pre_gt_loggray + gt_posneg*C_thres
+        loss_event += torch.abs(batch_gt_loggray_events - rendered_gray*255).sum()
+
+        balancer = self.cfg['event']['balancer']
+        loss_event = loss_event*balancer
+        loss_event.backward(retain_graph = True)
+
+        return loss_event.item()
 
     def optimize_after_sampling_pixels(self, idx, pre_c2w, gt_c2w, camera_tensor,
                                        evs_dict_xy, pre_evs_dict_xy, gt_event_images, no_evs_pixels, 
@@ -551,13 +594,14 @@ class Tracker(object):
                         compose_pose = torch.matmul(previous_c2w, estimated_correct_new_cam_c2w_homogeneous)[:3, :]
                         camera_tensor = get_tensor_from_camera_in_pytorch(compose_pose)
 
-                        #if self.event == True:
-                        loss_events = self.optimize_after_sampling_pixels(idx, estimated_new_cam_c2w, gt_c2w, camera_tensor,
-                                                                      evs_dict_xy, pre_evs_dict_xy, gt_event_images, no_evs_pixels,
-                                                                      pre_gt_color, pre_gt_depth,
-                                                                      gt_color, gt_depth, gt_event,
-                                                                      self.optim_quats_init, self.optim_trans_init)
+    
+                        # loss_events = self.optimize_after_sampling_pixels(idx, estimated_new_cam_c2w, gt_c2w, camera_tensor,
+                        #                                               evs_dict_xy, pre_evs_dict_xy, gt_event_images, no_evs_pixels,
+                        #                                               pre_gt_color, pre_gt_depth,
+                        #                                               gt_color, gt_depth, gt_event,
+                        #                                               self.optim_quats_init, self.optim_trans_init)
 
+                        loss_events = self.optimize_cam_event(camera_tensor, gt_depth, gt_event_images.squeeze(0), pre_gt_color, self.tracking_pixels,self.optim_quats_init, self.optim_trans_init)
                         if idx % 5 == 0:
                             loss_rgbd  = self.optimize_cam_rgbd(camera_tensor, gt_color, gt_depth, self.tracking_pixels,
                                                                 self.optim_quats_init, self.optim_trans_init)
