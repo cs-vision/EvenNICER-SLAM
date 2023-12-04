@@ -154,7 +154,7 @@ class Tracker(object):
 
         # NOTE : noevent sampling
         batch_i, batch_j, batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_noevent(
-            Hedge, H-Hedge, Wedge, W-Wedge, int(batch_size/2), H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, device)
+            Hedge, H-Hedge, Wedge, W-Wedge, int(batch_size*0.25), H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, device)
         ray_event = self.renderer.render_batch_ray(
             self.c, self.decoders, batch_rays_d, batch_rays_o,  device, stage='color', gt_depth=batch_gt_depth)
         _, event_uncertainty, rendered_color = ray_event
@@ -166,12 +166,9 @@ class Tracker(object):
         batch_pre_gt_loggray = self.lin_log(batch_pre_gt_gray*255, 20)
 
         # 2. add events to pre_gt_gray
-        # gt_pos = torch.unsqueeze(batch_gt_event[:, 0], dim=1)
-        # gt_neg = torch.unsqueeze(batch_gt_event[:, 1], dim=1)
         gt_posneg = torch.unsqueeze(batch_gt_event[:, 0], dim =1)
 
         C_thres = 0.1
-        # batch_gt_loggray_events = batch_pre_gt_loggray - gt_pos * C_thres + gt_neg * C_thres
         batch_gt_loggray_events = batch_pre_gt_loggray + gt_posneg * C_thres
 
         batch_gt_inverse_loggray = self.inverse_lin_log(batch_gt_loggray_events)
@@ -181,7 +178,7 @@ class Tracker(object):
 
         # NOTE : exit event sampling
         batch_i, batch_j, batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_exit_event(
-            Hedge, H-Hedge, Wedge, W-Wedge, int(batch_size/2), H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, device)
+            Hedge, H-Hedge, Wedge, W-Wedge, int(batch_size*0.75), H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, device)
         ray_event = self.renderer.render_batch_ray(
             self.c, self.decoders, batch_rays_d, batch_rays_o,  device, stage='color', gt_depth=batch_gt_depth) 
         _, event_uncertainty, rendered_color = ray_event
@@ -368,29 +365,7 @@ class Tracker(object):
                 gt_event_integrate = torch.cat((gt_event_integrate, gt_event), dim = 0)
                 gt_event_images += gt_event_image
 
-                # events_in = gt_event_integrate.cpu().numpy()
-                # evs_dict_xy = {}
-
-                # for ev in events_in:
-                #     key_xy = (ev[0], ev[1])
-                #     if key_xy in evs_dict_xy.keys():
-                #             evs_dict_xy[key_xy].append(ev.tolist())
-                #     else:
-                #         evs_dict_xy[key_xy] = [ev.tolist()]
-
-                #         # if idx < 10 :
-                #         #     pre_evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 0) 
-
-                # evs_dict_xy = dict((k, v) for k, v in evs_dict_xy.items() if len(v) > 0) 
-                # x = np.arange(self.W)
-                # y = np.arange(self.H)
-                # no_evs_pixels = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)
-                # no_evs_set = set(map(tuple, no_evs_pixels))
-                # evs_set = set(evs_dict_xy.keys())
-                # no_evs_set -= evs_set
-                # no_evs_pixels = np.array(list(no_evs_set))
-        
-
+    
                 for cam_iter in range(self.num_cam_iters):
                     # loss_events = self.optimize_after_sampling_pixels(idx, estimated_new_cam_c2w, camera_tensor,
                     #                                                   evs_dict_xy, gt_event_images, no_evs_pixels,
@@ -479,8 +454,6 @@ class Tracker(object):
             if idx % self.every_frame == 0:
                 pre_gt_depth = gt_depth
                 pre_gt_color = gt_color
-                # # NOTE : update pose every 5 frame 
-                # previous_c2w = c2w.clone()
                 # NOTE : insert dummy event
                 gt_event_integrate = torch.tensor([0, 0, 0, 0]).unsqueeze(0).to(device)
                 gt_event_images = torch.zeros_like(gt_event_image)
