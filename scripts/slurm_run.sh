@@ -19,10 +19,10 @@ output_affix="/scratch_net/biwidl215/myamaguchi/EvenNICER-SLAM/output"
 
 method="evennicer-slam"
 dataset=${datasets[0]}
-scene_name="room0"
+scene_name="room1"
 
 # Edit this to distinguish different configs
-run_suffix="framewise_eventloss"
+run_suffix="framewise_eventloss_150_50"
 
 # Run single or array job
 if [ -z "$SLURM_ARRAY_TASK_ID" ]; then
