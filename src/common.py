@@ -169,7 +169,7 @@ def select_uv_event_exit_event(i, j, n, depth, color, event, device='cuda:0'):
     event  = event.reshape(-1, 1)
 
     # イベントの値が0より大きい要素のインデックスを得る
-    positive_event_indices = (event > 0).nonzero(as_tuple=True)[0]
+    positive_event_indices = (event != 0).nonzero(as_tuple=True)[0]
 
     # positive_event_indicesの中からランダムにn個のインデックスを選択
     selected_indices = torch.randint(positive_event_indices.shape[0], (n,), device=device)
