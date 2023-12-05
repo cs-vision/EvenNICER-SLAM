@@ -183,6 +183,9 @@ class Tracker(object):
             self.c, self.decoders, batch_rays_d, batch_rays_o,  device, stage='color', gt_depth=batch_gt_depth) 
         _, event_uncertainty, rendered_color = ray_event
 
+        rendered_gray = self.rgb_to_luma(rendered_color, esim=True)
+        rendered_gray_log = self.lin_log(rendered_gray*255, 20)
+
         batch_pre_gt_gray = self.rgb_to_luma(batch_pre_gt_color, esim=True)
         batch_pre_gt_loggray = self.lin_log(batch_pre_gt_gray*255, 20)
 
