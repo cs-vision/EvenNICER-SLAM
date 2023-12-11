@@ -204,9 +204,11 @@ class Tracker(object):
         Wedge = self.ignore_edge_W
         Hedge = self.ignore_edge_H
 
+        event_nonevent_ratio = 0.75
+
         # NOTE : noevent sampling
         batch_i, batch_j, batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_noevent(
-            Hedge, H-Hedge, Wedge, W-Wedge, int(batch_size*0.25), H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, device)
+            Hedge, H-Hedge, Wedge, W-Wedge, int(batch_size*event_nonevent_ratio), H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, device)
         ray_event = self.renderer.render_batch_ray(self.c, self.decoders, batch_rays_d, batch_rays_o, device, stage='color', gt_depth=batch_gt_depth)
         _, _, rendered_color = ray_event
         rendered_gray = self.rgb_to_luma(rendered_color)
@@ -216,14 +218,14 @@ class Tracker(object):
         # NOTE : event sampling
         random_event_sampling = True
         batch_i, batch_j, batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_exit_event(
-            Hedge, H-Hedge, Wedge, W-Wedge, int(batch_size*0.75), H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, device)
+            Hedge, H-Hedge, Wedge, W-Wedge, int(batch_size*(1-event_nonevent_ratio)), H, W, fx, fy, cx, cy, c2w, gt_depth, pre_gt_color, gt_event, device)
         batch_pre_gt_gray = self.rgb_to_luma(batch_pre_gt_color)
         batch_pre_gt_loggray = self.lin_log(batch_pre_gt_gray*255, 20)
         if random_event_sampling == True:
             sampled_tensor = torch.stack([batch_i, batch_j], dim=1).to(device)
             events_random_time = []
             events_random_sum = []
-            for i in range(int(batch_size*0.75)):
+            for i in range(int(batch_size*(1-event_nonevent_ratio))):
                 xy = tuple(sampled_tensor[i].cpu().numpy())
                 events_time_stamps = []
                 events_polarities = []
@@ -236,8 +238,8 @@ class Tracker(object):
                 events_random_time_sum = events_sum[events_random_index]
                 events_random_sum.append(events_random_time_sum)
 
-            events_random_time = torch.tensor(events_random_time, dtype=torch.float32).reshape(batch_size//2, -1).to(device)
-            events_random_sum = torch.tensor(events_random_sum, dtype=torch.float32).reshape(batch_size//2, -1).to(device)
+            events_random_time = torch.tensor(events_random_time, dtype=torch.float32).reshape(int(batch_size*(1-event_nonevent_ratio)), -1).to(device)
+            events_random_sum = torch.tensor(events_random_sum, dtype=torch.float32).reshape(int(batch_size*(1-event_nonevent_ratio)), -1).to(device)
             ray_o, ray_d = self.get_event_rays(batch_i, batch_j, events_random_time, pre_c2w, H, W, fx, fy, cx, cy, device) 
             ret = self.renderer.render_batch_ray(self.c, self.decoders, ray_d, ray_o, device, stage='color', gt_depth=batch_gt_depth)
             _, _, rendered_color = ret
