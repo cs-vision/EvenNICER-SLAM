@@ -204,7 +204,7 @@ class Tracker(object):
         Wedge = self.ignore_edge_W
         Hedge = self.ignore_edge_H
 
-        event_nonevent_ratio = 0.75
+        event_nonevent_ratio = 0.25
 
         # NOTE : noevent sampling
         batch_i, batch_j, batch_rays_o, batch_rays_d, batch_gt_depth, batch_pre_gt_color, batch_gt_event = get_samples_noevent(
@@ -320,7 +320,8 @@ class Tracker(object):
             color_loss = torch.abs(
                 batch_gt_color - color)[mask].sum()
             loss_rgbd += self.w_color_loss*color_loss
-
+            print(loss_rgbd)
+    
         loss_rgbd.backward()   
 
         return loss_rgbd.item()
@@ -581,8 +582,12 @@ class Tracker(object):
             if idx % self.every_frame == 0:
                 pre_gt_depth = gt_depth
                 pre_gt_color = gt_color
-                # NOTE : update pose every 5 frame 
-                previous_c2w = c2w.clone()
+                # NOTE : update pose every 5 frame
+                if idx != 0 and False:
+                    if loss_camera_tensor < 0.1:
+                        previous_c2w = c2w.clone()
+                else:
+                    previous_c2w = c2w.clone()
                 # NOTE : insert dummy event
                 gt_event_integrate = torch.tensor([0, 0, 0, 0]).unsqueeze(0).to(device)
                 gt_event_images = torch.zeros_like(gt_event_image)
