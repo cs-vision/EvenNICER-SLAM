@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from pytorch3d.transforms import matrix_to_quaternion
+import cv2
 
 def as_intrinsics_matrix(intrinsics):
     """
@@ -127,7 +128,7 @@ def select_uv_event(i, j, n, depth, color, event, device='cuda:0'):
     event = event[indices]
     return i, j, depth, color, event
 
-def select_uv_event_noevent(i, j, n, depth, color, event, device='cuda:0'):
+def select_uv_event_noevent_aa(i, j, n, depth, color, event, device='cuda:0'):
     """
     Select n uv from dense uv.
     """
@@ -140,6 +141,52 @@ def select_uv_event_noevent(i, j, n, depth, color, event, device='cuda:0'):
     # イベントの値が0より大きい要素のインデックスを得る
     positive_event_indices = (event == 0).nonzero(as_tuple=True)[0]
 
+    # positive_event_indicesの中からランダムにn個のインデックスを選択
+    selected_indices = torch.randint(positive_event_indices.shape[0], (n,), device=device)
+
+    # 選ばれたインデックスに基づいて次元をクランプ
+    selected_indices = selected_indices.clamp(0, positive_event_indices.shape[0])
+
+    # positive_event_indicesから選ばれたインデックスに対応するインデックスを取得
+    indices = positive_event_indices[selected_indices]
+
+    # indicesを使用してデータを選択
+    i = i[indices]  # (n)
+    j = j[indices]  # (n)
+    depth = depth[indices]  # (n)
+    color = color[indices]  # (n,3)
+    event = event[indices]  # (n,1)
+    
+    return i, j, depth, color, event
+
+def select_uv_event_noevent(i, j, n, depth, color, event, device='cuda:0'):
+    """
+    Select n uv from dense uv.
+    """
+    i = i.reshape(-1)
+    j = j.reshape(-1)
+    depth = depth.reshape(-1)
+    color = color.reshape(-1, 3)
+    event  = event.reshape(-1, 1)
+
+    positive_event_indices = (event == 0).nonzero(as_tuple=True)[0]
+    #print(len(positive_event_indices))
+
+    # filtering event
+    event_clamp = torch.where(event==0, 0, 1).cpu()
+    print(event_clamp.sum())
+    kernel = torch.ones(5, 5).unsqueeze(0).unsqueeze(0).long()
+
+    condition = torch.nn.functional.conv2d(event_clamp.unsqueeze(0).unsqueeze(0), kernel, padding='same') >= 4
+    print(condition.sum())
+    # マスクされた条件式を使用してイベントをフィルタリング
+    filtered_event = torch.where(condition == True, event.cpu(), torch.zeros_like(event).cpu())
+
+    
+    # 日本語：イベントの値が0より大きく，かつ周囲のpixelでもイベントが発生している要素のインデックスを得る
+    # English : Get the index of the element whose event value is greater than 0 and the event has occurred in the surrounding pixels.
+    positive_event_indices = (filtered_event == 0).nonzero(as_tuple=True)[0]
+    print("positive_event_indices")
     # positive_event_indicesの中からランダムにn個のインデックスを選択
     selected_indices = torch.randint(positive_event_indices.shape[0], (n,), device=device)
 
