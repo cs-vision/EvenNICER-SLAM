@@ -18,7 +18,7 @@ Download the data as below and the data is saved into the `./Datasets/Replica` f
 ```bash
 bash scripts/download_replica.sh
 ```
-Then you need an extra GT event image dataset (generated using ESIM), which can be downloaded here: https://polybox.ethz.ch/index.php/s/JEUIwGWFjdaWK4x (password: evennicer)
+Then you need an extra GT event image dataset (generated using ESIM), which can be downloaded here: [https://polybox.ethz.ch/index.php/s/JEUIwGWFjdaWK4x](https://www.polybox.ethz.ch/index.php/s/YdIZwcEr8apWBLk) (password: evennicer)
 
 The directory `./Datasets` should look like this:
 ```bash
